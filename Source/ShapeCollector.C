@@ -1,0 +1,508 @@
+/* ***********************************************************************
+* Copyright (C) 2019-2021, Dennis Muecher.                               *
+* All rights reserved.                                                   *
+*                                                                        *
+* This program is free software: you can redistribute it and/or modify   *
+* it under the terms of the GNU General Public License as published by   *
+* the Free Software Foundation, either version 3 of the License, or      *
+* (at your option) any later version.                                    *
+* You should have received a copy of the GNU General Public License      *
+* along with this program. If not, see  http://www.gnu.org/licenses/.    *
+*************************************************************************/
+#include "../Include/ShapeCollector.h"
+
+//constructor using setting file and a matrix
+ShapeCollector::ShapeCollector(ShapeSetting* t_sett, ShapeMatrix* t_matrix):m_sett(t_sett), m_matrix(t_matrix)
+{
+    //get literature gSF data
+    litCollector = new ShapeGSF(m_sett);
+    gSFGraph = new TGraphErrors();
+    gSFGraphSmooth = new TGraphAsymmErrors();
+
+}
+
+ShapeCollector::~ShapeCollector()
+{
+    ClearCollector();
+    delete litCollector;
+    delete gSFGraph;
+    delete gSFGraphSmooth;
+}
+
+//deletes every ShapeGSF* owned by gSFCollector, then empties the vector.
+//gSFCollector previously only ever got .clear()'d, which dropped the pointers
+//without freeing them -- a leak on every Collect()/mc_Collect() call, and a
+//bad one inside the MonteCarlo() loop where this can run hundreds of times.
+void ShapeCollector::ClearCollector()
+{
+    for (auto gsf : gSFCollector)
+        delete gsf;
+    gSFCollector.clear();
+}
+
+
+// runs all different iterations in Monte Carlo mode of gSF following the user input stored in the settings file m_sett
+void ShapeCollector::mc_Collect() {
+    
+    TRandom3 *r = new TRandom3(0);
+    
+    //reset gSF collector vector
+    ClearCollector();
+    
+    //bin size
+    m_matrix->SetESize( r->Uniform(m_sett->exi_size[0], m_sett->exi_size[1]) );
+    //sliding window
+    m_matrix->SetEne0(r->Uniform(m_sett->exiEneMC[0], m_sett->exiEneMC[1]) );
+    
+    if (m_sett->verbose) {
+        std::cout <<"MC settings:"<<std::endl;
+        std::cout <<"ESize in settins:"<< m_sett->exi_size[0]  <<" " <<m_sett->exi_size[1] << std::endl;
+        std::cout <<"ExiEne in settins:"<< m_sett->exiEne[0]  <<" " <<m_sett->exiEne[1] << std::endl;
+
+        std::cout <<"ESize in MC:"<< m_matrix->GetESize() << std::endl;
+        std::cout <<"Ene0 in MC:"<< m_matrix->GetEne0() << std::endl;
+
+
+    }
+    //get gSF data
+    gSFCollector.push_back( new ShapeGSF(m_sett, m_matrix));
+    
+    //normalize gSF results to literature data
+    NormCollect();
+    
+    delete r;
+}
+
+// runs all different iterations of gSF following the user input stored in the settings file m_sett
+void ShapeCollector::Collect() {
+    
+    if (m_sett->doMC) {
+        mc_Collect();
+        return;
+    }
+    
+    m_matrix->SetEne0( m_sett->exiEne[0] );
+    m_matrix->SetEne1( m_sett->exiEne[1] );
+    m_matrix->SetESize( m_sett->exi_size[0] );
+    
+    //reset gSF collector vector
+    ClearCollector();
+    
+    // Calculate total number of iterations for progress reporting
+    int totalIterations = 0;
+    double currentBinSize = m_sett->exi_size[0];
+    do {
+        int slidingSteps = m_sett->doSlidingWindow ? kmax : 1;
+        totalIterations += slidingSteps;
+        if (!m_sett->doBinVariation) break;
+        currentBinSize += 50;
+    } while (currentBinSize <= m_sett->exi_size[1]);
+    
+    int iterationCount = 0;
+    
+    // Main loop over bin sizes (only runs once if bin variation is disabled)
+    while (m_matrix->GetESize() <= m_sett->exi_size[1]) {
+        //sliding window
+        for (int i = 1; i < kmax; i++) {
+            
+            iterationCount++;
+            
+            // the sliding window moves from the inital position in kmax steps to the end position, which is one bin to the "left"
+            // the high energy is kept at the initital value, at all times
+            m_matrix->SetEne0( m_sett->exiEne[0] - ( (double) (i-1) * m_matrix->GetESize() / (kmax-1)));
+            
+            // Print loop status information
+            if (m_sett->verbose) {
+                // Calculate number of bins from the excitation energy range and bin size
+                int nBins = (int)((m_matrix->GetEne1() - m_matrix->GetEne0()) / m_matrix->GetESize());
+                if ((int)(m_matrix->GetEne1() - m_matrix->GetEne0()) % (int)m_matrix->GetESize() != 0)
+                    nBins++;
+                
+                std::cout << "\n========================================" << std::endl;
+                std::cout << "Loop " << iterationCount << " of " << totalIterations << std::endl;
+                std::cout << "Bin size: " << m_matrix->GetESize() << " keV" << std::endl;
+                std::cout << "Excitation window: " << m_matrix->GetEne0() << " - " << m_matrix->GetEne1() << " keV" << std::endl;
+                std::cout << "Number of bins: " << nBins << std::endl;
+                if (m_sett->doSlidingWindow) {
+                    std::cout << "Sliding window step: " << i << " of " << kmax << std::endl;
+                }
+                if (m_sett->doBinVariation) {
+                    std::cout << "Bin size variation: enabled (range " << m_sett->exi_size[0] << " - " << m_sett->exi_size[1] << " keV)" << std::endl;
+                }
+                std::cout << "========================================\n" << std::endl;
+            }
+            
+           //get gSF data
+            gSFCollector.push_back( new ShapeGSF(m_sett, m_matrix));
+            
+            //if no sliding window is requested, stop here
+            if (!m_sett->doSlidingWindow)
+                break;
+        }
+        
+        //check if bin size should be varried
+        if (!m_sett->doBinVariation) break;
+        
+        //change bin size
+        m_matrix->SetESize( m_matrix->GetESize() + 50 );
+        //update matrix and recalculate gSF in case doSlidingWindow is not active; otherwise this is done in the sliding window loop
+        
+    }
+    
+    //normalize all data to each other
+    NormCollect();
+    
+    m_matrix->SetEne0( m_sett->exiEne[0] );
+    m_matrix->SetEne1( m_sett->exiEne[1] );
+    m_matrix->SetESize( m_sett->exi_size[0] );
+    m_matrix->Diag();
+}
+
+void ShapeCollector::Draw() {
+    
+    getMultGraph()->Draw("AP");
+}
+
+void ShapeCollector::Print() {
+    
+    if (m_sett->displayAvg) {
+        std::cout <<"gSF values for smoothed graph:" <<std::endl;
+        std::cout <<"energy    gSF   error gSF" <<std::endl;
+
+        for (int i = 0; i < gSFGraphSmooth->GetN(); i++) {
+            double e = gSFGraphSmooth->GetX()[i];
+            double g = gSFGraphSmooth->GetY()[i];
+            double dgHigh = gSFGraphSmooth->GetEYhigh()[i];
+            double dgLow = gSFGraphSmooth->GetEYlow()[i];
+
+            if (dgHigh == dgLow)
+                std::cout << e <<" " << g << " " << dgHigh <<std::endl;
+            else
+                std::cout << e <<" " << g << " + " << dgHigh << " - " << dgLow<<std::endl;
+
+        }
+    }
+    
+    if (m_sett->displaySingle) {
+        for (auto coll : gSFCollector)
+            coll->Print();
+    }
+    
+    if (m_sett->doOslo) {
+        std::cout <<"Here are the literature gSF values:"<<std::endl;
+        litCollector->Print();
+    }
+}
+
+void ShapeCollector::Transform(double B_t, double alpha_t) {
+    if (litCollector->GetLevGraph()->GetN() > 0) {
+        litCollector->Transform(B_t, alpha_t);
+    }
+    //re-scale gSF data to new literature data
+    NormCollect();
+}
+
+//normalizes all gSF iterations to each other
+void ShapeCollector::NormCollect() {
+    
+    double norm_fac = 1;
+    
+    for (int i = 0; i < gSFCollector.size(); i++) {
+        
+        
+        if (m_sett->doOslo && m_sett->doAutoScale)
+            norm_fac = Norm(gSFCollector[i], litCollector);
+        else
+            norm_fac = Norm(gSFCollector[i], gSFCollector[0]);
+    
+        gSFCollector[i]->Scale(norm_fac);
+    }
+    Merge();
+}
+    
+TMultiGraph* ShapeCollector::getMultGraph() {
+    
+    //define Multigraph
+    TMultiGraph* multGraph = new TMultiGraph();
+    multGraph->SetTitle("Gamma Ray Strength Function from Shape Method; E_{#gamma} (keV); f(E_{#gamma} (MeV^{-3})" );
+    
+    //add literature values first (bottom layer)
+    
+    if (m_sett->doMC) {
+        Transform(m_sett->lit_norm, m_sett->lit_alpha);
+        multGraph->Add(litCollector->GetLevGraph(),"AL");
+    }
+    else if (m_sett->doOslo) {
+        Transform(m_sett->lit_norm, m_sett->lit_alpha);
+        multGraph->Add(litCollector->GetLevGraph(),"3");
+    }
+    
+    //add individual data points (middle layer)
+    if (m_sett->displaySingle) {
+        //add all the gSF data stored in the collector to the MultiGraph
+        for (int i = 0; i < gSFCollector.size(); i++) {
+            multGraph->Add(gSFCollector[i]->GetLevGraph_1());
+            multGraph->Add(gSFCollector[i]->GetLevGraph_2());
+        }
+    }
+    
+    //add smoothed average graph last (top layer), styled in black
+    if (m_sett->displayAvg) {
+        Smooth(0);
+        gSFGraphSmooth->SetMarkerColor(1);  // black
+        gSFGraphSmooth->SetLineColor(1);    // black
+        multGraph->Add(gSFGraphSmooth,"P");
+    }
+    return ( multGraph );
+}
+
+//merges all gSF data in the gSFCollector vector into a single graph and sorts via gamma energy
+void ShapeCollector::Merge() {
+    
+    TObjArray *mArray = new TObjArray();
+    gSFGraph->Set(0);
+    
+    for (int i = 0; i < gSFCollector.size(); i++)
+        mArray->Add(gSFCollector[i]->GetLevGraph());
+    
+    gSFGraph->Merge(mArray);
+    gSFGraph->Sort();
+    if (m_sett->displayAvg)
+        Smooth(0);
+
+    //mArray does not own its elements (TObjArray::SetOwner() was never called),
+    //so deleting the array container itself does not touch the graphs it holds
+    delete mArray;
+}
+
+//calcualation of a normalization factor to match T1 to T2
+double ShapeCollector::Norm(ShapeGSF* T1, ShapeGSF* T2 ) {
+    
+    double c1 = 0, c2 = 0;
+    std::vector<double> a;
+    std::vector<double> da;
+    std::vector<double> b;
+    
+    //determine maximum energy stored in T2 graph; I assume T2 is sorted in energy
+    
+    int nOfEntriesT2 = T2->GetLevGraph()->GetN();
+    double maxE = T2->GetLevGraph()->GetX()[nOfEntriesT2-1];
+    for (int i = 0; i < T1->GetLevGraph()->GetN(); i++) {
+        //stop once we reach the highest energy stored in T2
+        if (T1->GetLevGraph()->GetX()[i] > maxE )
+            break;
+        a.push_back( T1->GetLevGraph()->GetY()[i] );
+        da.push_back( T1->GetLevGraph()->GetEY()[i] );
+        b.push_back( T2->GetLevGraph()->Eval( T1->GetLevGraph()->GetX()[i] ) );
+    }
+    
+    for (int i = 0; i < a.size(); i++) {
+        //in case of MC mode, there are no error bars
+        if (m_sett->doMC) {
+            c1 += ( a[i] * b[i] );
+            c2 += ( a[i] * a[i] );
+        }
+        else if ( da[i] !=0 ) {
+          c1 += ( a[i] * b[i] / da[i] );
+          c2 += ( a[i] * a[i] / da[i] );
+        }
+        else {
+            std::cout <<"Error in Norm(): zero error value detected" <<std::endl;
+            return (0);
+        }
+    }
+    if (c2 !=0)
+        return (c1 / c2);
+    else {
+        std::cout <<"Error in Norm(): zero c2 value detected" <<std::endl;
+        return (0);
+    }
+}
+
+
+//returns the chi2 for the MC mode, comparing the smooth gSF to the Oslo literature data
+double ShapeCollector::mc_getChi2(){
+    
+    double chi2 = 0;
+    for (int i = 0; i < gSFGraph->GetN(); i++) {
+        double x = gSFGraph->GetX()[i];
+        double y = gSFGraph->GetY()[i];
+        double y_oslo = litCollector->GetLevGraph()->Eval(x);
+        if (y > 0) {
+            chi2 += TMath::Power( (y_oslo - y) /y_oslo, 2);
+        }
+        else {
+            std::cout <<"Error in getChi2: zero or negative value for y_oslo error for point " <<i<<" ! Skipping this data point" <<std::endl;
+            continue;
+        }
+    }
+    return (chi2);
+}
+
+//returns the chi2 for the levGraphAll graph, comparing the gSF to the Oslo literature data
+
+double ShapeCollector::getChi2All(){
+    
+    double chi2 = 0;
+    for (int i = 0; i < gSFGraph->GetN(); i++) {
+        double x = gSFGraph->GetX()[i];
+        double y = gSFGraph->GetY()[i];
+        double dyh = gSFGraph->GetErrorYhigh(i);
+        double dyl = gSFGraph->GetErrorYlow(i);
+        double dy = (dyh + dyl)/2;
+        double y_oslo = litCollector->GetLevGraph()->Eval(x);
+        
+        if (dy == 0) {
+            std::cout <<"Error in getChi2: zero value for gSF error for point " <<i<<" ! Skipping this data point" <<std::endl;
+            continue;
+        }
+        else
+            chi2 += TMath::Power( ( y_oslo - y ) / dy, 2);
+    }
+    return (chi2);
+}
+
+//returns the chi2 for the levGraphSmooth graph, comparing the smooth gSF to the Oslo literature data
+
+double ShapeCollector::getChi2Smooth(){
+    
+    double chi2 = 0;
+    int n = gSFGraphSmooth->GetN();
+    for (int i = 0; i < n; i++) {
+        double x = gSFGraphSmooth->GetX()[i];
+        double y = gSFGraphSmooth->GetY()[i];
+
+        double dyh = gSFGraphSmooth->GetErrorYhigh(i);
+        double dyl = gSFGraphSmooth->GetErrorYlow(i);
+
+        double dy = (dyh + dyl)/2;
+        double y_oslo = litCollector->GetLevGraph()->Eval(x);
+
+        if (dy == 0) {
+            std::cout <<"Error in getChi2: zero value for gSF error for point " <<i<<" ! Skipping this data point" <<std::endl;
+            continue;
+        }
+        else
+            chi2 += TMath::Power( ( y_oslo - y ) / dy, 2);
+
+    }
+    return (chi2);
+}
+
+double ShapeCollector::getChi2(){
+    if (m_sett->doMC)
+        return mc_getChi2();
+    else if (m_sett->displayAvg)
+        return getChi2Smooth();
+    else
+        return getChi2All();
+}
+ 
+void ShapeCollector::Smooth(int res) {
+    
+    gSFGraphSmooth->Set(0);
+    // if res == 0 use exi_size[0] (user input) for the bin size
+    if (res ==0)
+        res = m_sett->exi_size[0];
+    auto nPoints = gSFGraph->GetN();
+    double m_e = gSFGraph->GetX()[0] + res;
+    std::vector <int> i_bin;          //the point number limits of levGraphAll belonging to the bins with size res
+    i_bin.push_back(0);             //first bin always starts at zero
+    for(int i =1; i < nPoints; i++) {
+        if (gSFGraph->GetX()[i] > m_e) {
+            i_bin.push_back(i);
+            m_e += res;
+            i--;
+            
+        }
+    }
+    
+    i_bin.push_back(nPoints);
+    
+    //now calculate the average gSF values for each bin
+    
+    for (int i = 0 ; i < i_bin.size() -1; i++) {
+        double x = 0, y = 0;
+        double dy = 0;
+        for (int j = i_bin[i]; j < i_bin[i+1]; j++) {
+            x += gSFGraph->GetX()[j];
+            y += gSFGraph->GetY()[j];
+            
+            //this error is the max error of any individual error point; this does not take into account the fluctuations in the data points (i.e. the standard deviation, see below)
+            double m_dy = TMath::Abs(gSFGraph->GetEY()[j]);
+            if (m_dy > dy)
+                dy = m_dy;
+            
+        }
+        int nOfP = i_bin[i+1] - i_bin[i];     //number of points in this bin
+        if (nOfP ==0) continue;
+        x = x / nOfP;
+        y = y / nOfP;
+        
+        gSFGraphSmooth->SetPoint(gSFGraphSmooth->GetN(),x,y);
+        
+        double st_dev = 0;
+        for (int j = i_bin[i]; j < i_bin[i+1]; j++) {
+            st_dev += TMath::Power(gSFGraph->GetY()[j] - y, 2);
+        }
+        if (nOfP > 2)
+            st_dev = TMath::Sqrt(st_dev / (nOfP -1) );
+        
+        //take care about points with small errors; those impact the chi2 fitting in a very biased way because they don't refelct the statistical fluctuations of the Shape Method
+        //if (st_dev < 0.1 * y)
+          //  st_dev = 0.1 * y;
+        double dySum = TMath::Sqrt( TMath::Power(st_dev, 2) + TMath::Power(dy, 2));
+        
+        gSFGraphSmooth->SetPointError(gSFGraphSmooth->GetN()-1, 0, 0, dySum, dySum);
+        
+        //calculate max errors including errors of individual data points
+
+        double dyl=0,dyh=0;
+        for (int j = i_bin[i]; j < i_bin[i+1]; j++) {
+                //difference of average to upper error bar
+                double m_dyh = gSFGraph->GetY()[j] + gSFGraph->GetEY()[j] - y;
+                if (m_dyh > dyh)
+                    dyh = m_dyh;
+                //difference of average to lower error bar
+                double m_dyl = y - gSFGraph->GetY()[j] + gSFGraph->GetEY()[j];
+                if (m_dyl > dyl)
+                dyl = m_dyl;
+        }
+        //gSFGraphSmooth->SetPointError(gSFGraphSmooth->GetN()-1, 0, 0, dyl, dyh);
+        //some old stuff
+        
+       /* int upper = 0, lower = 0;
+        double dyl=0,dyh=0;
+        for (int j = i_bin[i]; j < i_bin[i+1]; j++) {
+            //if ( levGraphAll->GetY()[j] > y) {
+                dyh += TMath::Power(levGraphAll->GetY()[j]
+                                +levGraphAll->GetEY()[j]
+                                -y, 2);
+                upper++;
+            //}
+            //else {
+                dyl += TMath::Power(levGraphAll->GetY()[j]
+                                -levGraphAll->GetEY()[j]
+                                -y, 2);
+                lower++;
+            //}
+            
+        }
+        
+        dyl = TMath::Sqrt(dyl /lower );
+        
+        if (dyh == 0) {
+            dyh = dyl;
+        }
+        else {
+            dyh = TMath::Sqrt(dyh / upper );
+        }
+         
+        levGraphSmooth->SetPointError(levGraphSmooth->GetN()-1,
+                                      0, 0, dyl, dyh);*/
+    }
+        
+    gSFGraphSmooth->SetMarkerStyle(22);
+    gSFGraphSmooth->SetMarkerSize(2);
+    gSFGraphSmooth->SetMarkerColor(1);
+}
