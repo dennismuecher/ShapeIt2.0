@@ -1,0 +1,47 @@
+Raw/Kr88.root
+GSF/oslo_data_88Kr_Dec2021.txt
+
+matrixName matrix120
+MeV: 1
+mode 2
+doInterpol 1
+doOslo 1
+alphaLimit -1 1
+alphaIter 100
+doEffi 0
+doAutoScale 1
+colour 1
+doGRF 0
+displayAverage 1
+displaySingle 1
+doSlidingWindow 1
+doBinVariation 0
+doBackground 1
+verbose 0
+gSF_norm 0.05
+lit_norm 1
+lit_alpha 0.2
+lit_alpha_error 0.07 0.07
+level1 685 900
+level1_2 0 0
+bg_level1 619.663 679.693 866.582 930.364
+bg_level2 1434.68 1480.86 1730.21 1794.86
+level2 1497 1732
+level2_2 0 0
+excitation 3500 6300
+excitationMCLimits 3500 4000
+excitation_bin_1 280
+excitation_bin_2 500
+nOfBins 10
+eff_corr 1.45
+minCounts 200
+doWidthCal 0
+widthCal 23.8194 0.000436941 32.6141 0.00173787
+rhoFileName NLD/kr88rho_dec21.txt
+rhoScale 0.608
+spinLow 0
+spinHigh 3
+discreteLevelFile NLD/kr88rho_discrete.txt 128
+ldmodel4 Talys/kr88_ld4.out 0.06 0 0 0
+ldmodel5 Talys/kr88_ld5.out 1.01 0 1 0
+ldmodel6 Talys/kr88_ld6.out 0.68 0 1 0

@@ -1,0 +1,25 @@
+/Users/artemis/Documents/Experiments/ANL/e1799-Kr/mama-88/Kr88_fg.root
+
+matrixName matrix1
+MeV: 1
+mode 1
+doInterpol 1
+doOslo 0
+doSlidingWindow 0
+doBinVariation 0
+doBackground 1
+verbose 1
+gSF_norm 0.4
+level1 720 857
+bg_level1 634.604 693.065 888.342 947.862
+bg_level2 1449.6 1522.9 1684.77 1785.56
+level2 1513 1711
+excitation 4000 7000
+excitation_bin_1 400
+excitation_bin_2 500
+nOfBins 8
+eff_corr 1.4
+interPoint 2
+minCounts 70
+doWidthCal 0
+widthCal 0 0 0 0

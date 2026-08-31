@@ -615,6 +615,7 @@ int gSkipRangeChecks = 0;  // Skip this many polling cycles (for context menu op
 // Track last marker positions to detect when they're dragged
 double gLastLevEne[4] = {0, 0, 0, 0};
 double gLastBgEne[2][4] = {{0, 0, 0, 0}, {0, 0, 0, 0}};
+double gLastPeakPos[6] = {0, 0, 0, 0, 0, 0};  // peakPos[0/1], doubletPeakPos[0/1], tripletPeakPos[0/1]
 bool gHaveLastMarkers = false;
 
 // Track width calibration plot axis ranges (set once when plot is created)
@@ -1076,22 +1077,31 @@ void CheckMarkersChanged()
 {
     if (!matrix || (gDisplayMode != 4 && gDisplayMode != 5))
         return;
-    
+
     if (!gMarkerLine[0] || !gBgBox[0])
         return;
-    
+
     // Read current marker positions
     double levEne[4];
     double bgEne[2][4];
-    
+
     for (int i = 0; i < 4; i++)
         levEne[i] = gMarkerLine[i]->GetX1();
-    
+
     bgEne[0][0] = gBgBox[0]->GetX1(); bgEne[0][1] = gBgBox[0]->GetX2();
     bgEne[0][2] = gBgBox[1]->GetX1(); bgEne[0][3] = gBgBox[1]->GetX2();
     bgEne[1][0] = gBgBox[2]->GetX1(); bgEne[1][1] = gBgBox[2]->GetX2();
     bgEne[1][2] = gBgBox[3]->GetX1(); bgEne[1][3] = gBgBox[3]->GetX2();
-    
+
+    // Read current peak marker positions
+    double peakPos[6];
+    peakPos[0] = gLevel1PeakMarker   ? gLevel1PeakMarker->GetX()   : sett->peakPos[0];
+    peakPos[1] = gLevel2PeakMarker   ? gLevel2PeakMarker->GetX()   : sett->peakPos[1];
+    peakPos[2] = gDoublet1PeakMarker ? gDoublet1PeakMarker->GetX() : sett->doubletPeakPos[0];
+    peakPos[3] = gDoublet2PeakMarker ? gDoublet2PeakMarker->GetX() : sett->doubletPeakPos[1];
+    peakPos[4] = gTriplet1PeakMarker ? gTriplet1PeakMarker->GetX() : sett->tripletPeakPos[0];
+    peakPos[5] = gTriplet2PeakMarker ? gTriplet2PeakMarker->GetX() : sett->tripletPeakPos[1];
+
     // Check if anything changed
     bool changed = false;
     if (gHaveLastMarkers) {
@@ -1112,8 +1122,16 @@ void CheckMarkersChanged()
                 if (changed) break;
             }
         }
+        if (!changed) {
+            for (int i = 0; i < 6; i++) {
+                if (std::abs(peakPos[i] - gLastPeakPos[i]) > 0.01) {
+                    changed = true;
+                    break;
+                }
+            }
+        }
     }
-    
+
     // Update stored values
     for (int i = 0; i < 4; i++) {
         gLastLevEne[i] = levEne[i];
@@ -1121,18 +1139,27 @@ void CheckMarkersChanged()
     for (int i = 0; i < 2; i++)
         for (int j = 0; j < 4; j++)
             gLastBgEne[i][j] = bgEne[i][j];
+    for (int i = 0; i < 6; i++)
+        gLastPeakPos[i] = peakPos[i];
     gHaveLastMarkers = true;
-    
+
     // If changed, update settings and UI
     if (changed) {
         for (int i = 0; i < 4; i++) {
             sett->levEne[i] = levEne[i];
         }
-        
+
         for (int i = 0; i < 2; i++)
             for (int j = 0; j < 4; j++)
                 sett->bgEne[i][j] = bgEne[i][j];
-        
+
+        sett->peakPos[0]       = peakPos[0];
+        sett->peakPos[1]       = peakPos[1];
+        sett->doubletPeakPos[0] = peakPos[2];
+        sett->doubletPeakPos[1] = peakPos[3];
+        sett->tripletPeakPos[0] = peakPos[4];
+        sett->tripletPeakPos[1] = peakPos[5];
+
         // Send only marker positions to UI, not full settings sync
         // This avoids overwriting checkbox states that may have changed in the UI
         // but not yet been sent back to C++
@@ -1142,7 +1169,10 @@ void CheckMarkersChanged()
         msg += std::to_string(sett->bgEne[0][0]) + "|" + std::to_string(sett->bgEne[0][1]) + "|";
         msg += std::to_string(sett->bgEne[0][2]) + "|" + std::to_string(sett->bgEne[0][3]) + "|";
         msg += std::to_string(sett->bgEne[1][0]) + "|" + std::to_string(sett->bgEne[1][1]) + "|";
-        msg += std::to_string(sett->bgEne[1][2]) + "|" + std::to_string(sett->bgEne[1][3]);
+        msg += std::to_string(sett->bgEne[1][2]) + "|" + std::to_string(sett->bgEne[1][3]) + "|";
+        msg += std::to_string(sett->peakPos[0]) + "|" + std::to_string(sett->peakPos[1]) + "|";
+        msg += std::to_string(sett->doubletPeakPos[0]) + "|" + std::to_string(sett->doubletPeakPos[1]) + "|";
+        msg += std::to_string(sett->tripletPeakPos[0]) + "|" + std::to_string(sett->tripletPeakPos[1]);
         window->Send(0, msg);
         
         // If in Autofit mode (mode 2), re-fit and redraw the current projection
@@ -1213,8 +1243,15 @@ void HandleCanvasEvent(Int_t event, Int_t /*x*/, Int_t /*y*/, TObject * /*obj*/)
         sett->bgEne[1][0] = gBgBox[2]->GetX1(); sett->bgEne[1][1] = gBgBox[2]->GetX2();
         sett->bgEne[1][2] = gBgBox[3]->GetX1(); sett->bgEne[1][3] = gBgBox[3]->GetX2();
 
+        if (gLevel1PeakMarker)    sett->peakPos[0]        = gLevel1PeakMarker->GetX();
+        if (gLevel2PeakMarker)    sett->peakPos[1]        = gLevel2PeakMarker->GetX();
+        if (gDoublet1PeakMarker)  sett->doubletPeakPos[0] = gDoublet1PeakMarker->GetX();
+        if (gDoublet2PeakMarker)  sett->doubletPeakPos[1] = gDoublet2PeakMarker->GetX();
+        if (gTriplet1PeakMarker)  sett->tripletPeakPos[0] = gTriplet1PeakMarker->GetX();
+        if (gTriplet2PeakMarker)  sett->tripletPeakPos[1] = gTriplet2PeakMarker->GetX();
+
         DrawMarkers();
-        
+
         // Send only marker positions to UI, not full settings sync
         // This avoids overwriting checkbox states that may have changed in the UI
         // but not yet been sent back to C++
@@ -1224,7 +1261,10 @@ void HandleCanvasEvent(Int_t event, Int_t /*x*/, Int_t /*y*/, TObject * /*obj*/)
         msg += std::to_string(sett->bgEne[0][0]) + "|" + std::to_string(sett->bgEne[0][1]) + "|";
         msg += std::to_string(sett->bgEne[0][2]) + "|" + std::to_string(sett->bgEne[0][3]) + "|";
         msg += std::to_string(sett->bgEne[1][0]) + "|" + std::to_string(sett->bgEne[1][1]) + "|";
-        msg += std::to_string(sett->bgEne[1][2]) + "|" + std::to_string(sett->bgEne[1][3]);
+        msg += std::to_string(sett->bgEne[1][2]) + "|" + std::to_string(sett->bgEne[1][3]) + "|";
+        msg += std::to_string(sett->peakPos[0]) + "|" + std::to_string(sett->peakPos[1]) + "|";
+        msg += std::to_string(sett->doubletPeakPos[0]) + "|" + std::to_string(sett->doubletPeakPos[1]) + "|";
+        msg += std::to_string(sett->tripletPeakPos[0]) + "|" + std::to_string(sett->tripletPeakPos[1]);
         window->Send(0, msg);
     }
 }
@@ -1644,11 +1684,24 @@ void ProcessData(unsigned connid, const std::string &arg)
 
         sett->SetFileName(path);
         currentMatrixPath = path;
+
+        // Apply default fit regions, peak positions, and background windows
+        // for a freshly opened matrix (no settings file loaded).
+        sett->levEne[0] = 200; sett->levEne[1] = 400;   // Level 1 fit region
+        sett->levEne[2] = 800; sett->levEne[3] = 1000;  // Level 2 fit region
+        sett->peakPos[0] = 300;                          // Level 1 peak position
+        sett->peakPos[1] = 900;                          // Level 2 peak position
+        sett->bgEne[0][0] = 100;  sett->bgEne[0][1] = 150;   // BG level 1 left
+        sett->bgEne[0][2] = 550;  sett->bgEne[0][3] = 600;   // BG level 1 right
+        sett->bgEne[1][0] = 700;  sett->bgEne[1][1] = 750;   // BG level 2 left
+        sett->bgEne[1][2] = 1100; sett->bgEne[1][3] = 1150;  // BG level 2 right
+
         delete matrix;
         matrix = nullptr;
         matrix = new ShapeMatrix(sett);
         SendMatrixListAndSelect(connid, currentMatrixPath, 1);
         SendNBins(connid);
+        SendSettingsSync(connid);
         // Enable width calibration now that we have a matrix loaded
         window->Send(connid, "WIDTH_CALIB_AVAILABLE:1");
         window->Send(connid, "Matrix opened: " + path);

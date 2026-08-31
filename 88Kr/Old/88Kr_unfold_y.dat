@@ -1,0 +1,33 @@
+/Users/dmuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt1.0/ShapeIt1.0/88Kr/Kr88_6500.root
+/Users/dmuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt1.0/ShapeIt1.0/OsloFiles/oslo_data_88Kr_uny_2.txt
+
+matrixName matrixsub
+MeV: 1
+mode 2
+doInterpol 1
+doOslo 1
+doEffi 0
+doAutoScale 1
+colour 1
+doGRF 0
+doSlidingWindow 1
+doBinVariation 0
+doBackground 1
+verbose 1
+gSF_norm 108.179
+level1 685 900
+level1_2 0 0
+bg_level1 563.434 662.935 924.699 1036.08
+bg_level2 1394.09 1460.66 1760.5 1825.65
+level2 1497 1732
+level2_2 0 0
+excitation 5000 6500
+excitation_bin_1 250
+excitation_bin_2 687
+nOfBins 6
+eff_corr 1.45
+sewingEne 6000
+minCounts 20
+doWidthCal 0
+widthCal 21.5683 0.000734557 21.3844 0.00343262
+rhoFileName /Users/dmuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt1.0/ShapeIt1.0/OsloFiles/oslo_data_88Kr_uny_2.txt

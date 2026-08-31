@@ -1247,12 +1247,12 @@ COMMUNICATION PROTOCOL:
           const v = msg.slice(14).split('|').map(Number);
           
           // Indices 0-5: Level and excitation energies
-          document.getElementById('lvl1-lo').value = v[0];
-          document.getElementById('lvl1-hi').value = v[1];
-          document.getElementById('lvl2-lo').value = v[2];
-          document.getElementById('lvl2-hi').value = v[3];
-          document.getElementById('exc-lo').value = v[4];
-          document.getElementById('exc-hi').value = v[5];
+          document.getElementById('lvl1-lo').value = v[0].toFixed(1);
+          document.getElementById('lvl1-hi').value = v[1].toFixed(1);
+          document.getElementById('lvl2-lo').value = v[2].toFixed(1);
+          document.getElementById('lvl2-hi').value = v[3].toFixed(1);
+          document.getElementById('exc-lo').value = v[4].toFixed(1);
+          document.getElementById('exc-hi').value = v[5].toFixed(1);
           
           // Indices 6-13: Multiplet settings
           const hasDoublet1 = v[6] !== 0;
@@ -1289,14 +1289,14 @@ COMMUNICATION PROTOCOL:
           document.getElementById('mode-autofit').checked = (mode === 2);
           
           // Indices 23-30: Background energies (CORRECTED!)
-          document.getElementById('bg1-lo1').value = v[23];
-          document.getElementById('bg1-hi1').value = v[24];
-          document.getElementById('bg1-lo2').value = v[25];
-          document.getElementById('bg1-hi2').value = v[26];
-          document.getElementById('bg2-lo1').value = v[27];
-          document.getElementById('bg2-hi1').value = v[28];
-          document.getElementById('bg2-lo2').value = v[29];
-          document.getElementById('bg2-hi2').value = v[30];
+          document.getElementById('bg1-lo1').value = v[23].toFixed(1);
+          document.getElementById('bg1-hi1').value = v[24].toFixed(1);
+          document.getElementById('bg1-lo2').value = v[25].toFixed(1);
+          document.getElementById('bg1-hi2').value = v[26].toFixed(1);
+          document.getElementById('bg2-lo1').value = v[27].toFixed(1);
+          document.getElementById('bg2-hi1').value = v[28].toFixed(1);
+          document.getElementById('bg2-lo2').value = v[29].toFixed(1);
+          document.getElementById('bg2-hi2').value = v[30].toFixed(1);
           
           // Indices 31-33: Display options (CORRECTED!)
           if (v.length >= 34) {
@@ -1348,9 +1348,9 @@ COMMUNICATION PROTOCOL:
             const peakPos2 = v[48];
             
             document.getElementById('fixPeakPos1').checked = fixPeak1;
-            document.getElementById('peakPos1').value = peakPos1;
+            document.getElementById('peakPos1').value = peakPos1.toFixed(1);
             document.getElementById('fixPeakPos2').checked = fixPeak2;
-            document.getElementById('peakPos2').value = peakPos2;
+            document.getElementById('peakPos2').value = peakPos2.toFixed(1);
           }
           
           // Indices 49-52: Peak 2 (doublet) position settings (CORRECTED!)
@@ -1361,9 +1361,9 @@ COMMUNICATION PROTOCOL:
             const peakPosD2 = v[52];
             
             document.getElementById('fixPeakPos2L1').checked = fixPeakD1;
-            document.getElementById('peakPos2L1').value = peakPosD1;
+            document.getElementById('peakPos2L1').value = peakPosD1.toFixed(1);
             document.getElementById('fixPeakPos2L2').checked = fixPeakD2;
-            document.getElementById('peakPos2L2').value = peakPosD2;
+            document.getElementById('peakPos2L2').value = peakPosD2.toFixed(1);
             
             updateKeepWidthsEqualState(1);
             updateKeepWidthsEqualState(2);
@@ -1377,9 +1377,9 @@ COMMUNICATION PROTOCOL:
             const peakPosT2 = v[56];
             
             document.getElementById('fixPeakPos3L1').checked = fixPeakT1;
-            document.getElementById('peakPos3L1').value = peakPosT1;
+            document.getElementById('peakPos3L1').value = peakPosT1.toFixed(1);
             document.getElementById('fixPeakPos3L2').checked = fixPeakT2;
-            document.getElementById('peakPos3L2').value = peakPosT2;
+            document.getElementById('peakPos3L2').value = peakPosT2.toFixed(1);
             
             updateKeepWidthsEqualState(1);
             updateKeepWidthsEqualState(2);
@@ -1421,23 +1421,34 @@ COMMUNICATION PROTOCOL:
         
         // Marker position update (sent when markers are dragged)
         // Format: levEne0|levEne1|levEne2|levEne3|bg1_lo1|bg1_hi1|bg1_lo2|bg1_hi2|bg2_lo1|bg2_hi1|bg2_lo2|bg2_hi2
+        //         |peakPos1|peakPos2|doubletPeakPos1|doubletPeakPos2|tripletPeakPos1|tripletPeakPos2
         // Only updates position fields, NOT checkbox states
         else if (msg.startsWith('MARKER_UPDATE:')) {
           const v = msg.slice(14).split('|').map(Number);
-          document.getElementById('lvl1-lo').value = v[0];
-          document.getElementById('lvl1-hi').value = v[1];
-          document.getElementById('lvl2-lo').value = v[2];
-          document.getElementById('lvl2-hi').value = v[3];
-          
+          document.getElementById('lvl1-lo').value = v[0].toFixed(1);
+          document.getElementById('lvl1-hi').value = v[1].toFixed(1);
+          document.getElementById('lvl2-lo').value = v[2].toFixed(1);
+          document.getElementById('lvl2-hi').value = v[3].toFixed(1);
+
           // Update background regions
-          document.getElementById('bg1-lo1').value = v[4];
-          document.getElementById('bg1-hi1').value = v[5];
-          document.getElementById('bg1-lo2').value = v[6];
-          document.getElementById('bg1-hi2').value = v[7];
-          document.getElementById('bg2-lo1').value = v[8];
-          document.getElementById('bg2-hi1').value = v[9];
-          document.getElementById('bg2-lo2').value = v[10];
-          document.getElementById('bg2-hi2').value = v[11];
+          document.getElementById('bg1-lo1').value = v[4].toFixed(1);
+          document.getElementById('bg1-hi1').value = v[5].toFixed(1);
+          document.getElementById('bg1-lo2').value = v[6].toFixed(1);
+          document.getElementById('bg1-hi2').value = v[7].toFixed(1);
+          document.getElementById('bg2-lo1').value = v[8].toFixed(1);
+          document.getElementById('bg2-hi1').value = v[9].toFixed(1);
+          document.getElementById('bg2-lo2').value = v[10].toFixed(1);
+          document.getElementById('bg2-hi2').value = v[11].toFixed(1);
+
+          // Update peak position fields
+          if (v.length >= 18) {
+            document.getElementById('peakPos1').value    = v[12].toFixed(1);
+            document.getElementById('peakPos2').value    = v[13].toFixed(1);
+            document.getElementById('peakPos2L1').value  = v[14].toFixed(1);
+            document.getElementById('peakPos2L2').value  = v[15].toFixed(1);
+            document.getElementById('peakPos3L1').value  = v[16].toFixed(1);
+            document.getElementById('peakPos3L2').value  = v[17].toFixed(1);
+          }
         }
         
         // Bin count update (after running ShapeIt)

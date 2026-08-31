@@ -1,0 +1,67 @@
+/Users/dennismuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt/ShapeIt1.0/Analysis/88Kr/Raw/Kr88.root
+/Users/dennismuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt/ShapeIt1.0/Analysis/88Kr/GSF/oslo_data_88Kr.txt
+../Analysis/88Kr/test_effi.dat
+matrixName matrix120
+MeV: 1
+mode 2
+doInterpol 1
+doOslo 1
+alphaLimit -1 1
+alphaIter 100
+doEffi 1
+doAutoScale 1
+colour 1
+doGRF 0
+displayAverage 1
+displaySingle 1
+doSlidingWindow 1
+doBinVariation 0
+doBackground 1
+verbose 0
+gSF_norm 1.56017
+lit_norm 1
+lit_alpha 0.03
+lit_alpha_error 0 0
+level1 673 1396.77
+level1_2 1000 1000
+level1_3 1300 1300
+doDoublet1 1
+doTriplet1 1
+fixDoubletWidth1 0
+fixTripletWidth1 0
+bg_level1 567.808 667.988 1427.01 1513.81
+bg_level2 1437.66 1505.98 2283.25 2347.45
+level2 1497 2276.18
+level2_2 1900 1900
+level2_3 2050 2050
+doDoublet2 1
+doTriplet2 1
+fixDoubletWidth2 1
+fixTripletWidth2 1
+excitation 3500 6700
+excitationMCLimits 3500 4500
+excitation_bin_1 320
+excitation_bin_2 320
+nOfBins 10
+eff_corr 1.45
+minCounts 200
+doWidthCal 0
+widthCal 25.01 0.0005 33.8117 0.000759
+fixPeakPos1 1
+peakPos1 796.9
+fixPeakPos2 0
+peakPos2 1615
+fixDoubletPeakPos1 1
+doubletPeakPos1 1000
+fixDoubletPeakPos2 1
+doubletPeakPos2 1900
+fixTripletPeakPos1 0
+tripletPeakPos1 1300
+fixTripletPeakPos2 1
+tripletPeakPos2 2050
+rhoFileName /Users/dennismuecher/Library/MobileDocuments/com~apple~CloudDocs/ShapeIt/ShapeIt1.0/Analysis/88Kr/NLD/Kr88rho_better.txt
+rhoScale 1.5
+spinLow 0
+spinHigh 3
+discreteLevelFile /Users/dennismuecher/Library/Mobile 0
+ldmodel5 Talys/kr88_ld5.out 0.78 0 1 0

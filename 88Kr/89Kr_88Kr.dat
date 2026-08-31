@@ -1,0 +1,46 @@
+Raw/Kr88.root
+/Users/dmuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt/ShapeIt1.0/Analysis/88Kr/GSF_89Kr/output_gsf_high.txt
+
+matrixName matrix120
+MeV: 1
+mode 2
+doInterpol 1
+doOslo 1
+alphaLimit -1 1
+alphaIter 100
+doEffi 0
+doAutoScale 1
+colour 1
+doGRF 0
+displayAverage 1
+displaySingle 0
+doSlidingWindow 1
+doBinVariation 0
+doBackground 1
+verbose 0
+gSF_norm 0.1
+lit_norm 1
+lit_alpha 0.03
+lit_alpha_error 0 0
+level1 685 900
+level1_2 0 0
+bg_level1 563.434 662.935 924.699 1036.08
+bg_level2 1394.09 1460.66 1760.5 1825.65
+level2 1497 1732
+level2_2 0 0
+excitation 3500 6700
+excitationMCLimits 3500 4500
+excitation_bin_1 320
+excitation_bin_2 533
+nOfBins 10
+eff_corr 1.45
+minCounts 200
+doWidthCal 0
+widthCal 24.556 6.59782e-05 33.8117 0.000759378
+rhoFileName NLD/Kr88rho_better.txt
+rhoScale 1.5
+spinLow 0
+spinHigh 3
+gSFFileName /Users/dmuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt/ShapeIt1.0/Analysis/88Kr/GSF_89Kr/output_gsf_high.txt
+discreteLevelFile NLD/kr88rho_discrete.txt 127
+ldmodel5 Talys/kr88_ld5.out 0.78 0 1 0

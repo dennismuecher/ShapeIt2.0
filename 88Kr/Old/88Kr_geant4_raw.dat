@@ -1,0 +1,33 @@
+/Users/dmuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt1.0/ShapeIt1.0/88Kr/Kr88_rain1_geant4_matrix.root
+/Users/dmuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt1.0/ShapeIt1.0/88Kr/Kr88_E1.txt
+
+matrixName matrix1
+MeV: 1
+mode 2
+doInterpol 1
+doOslo 1
+doEffi 0
+doAutoScale 1
+colour 1
+doGRF 0
+doSlidingWindow 1
+doBinVariation 0
+doBackground 1
+verbose 0
+gSF_norm 0.310589
+level1 678 887
+level1_2 0 0
+bg_level1 605.675 652.956 894.088 941.369
+bg_level2 1433.09 1480.37 1714.41 1761.69
+level2 1501 1667
+level2_2 0 0
+excitation 2500 8000
+excitation_bin_1 400
+excitation_bin_2 800
+nOfBins 14
+eff_corr 1.45
+sewingEne 4500
+minCounts 50
+doWidthCal 0
+widthCal 0 0 0 0
+rhoFileName 

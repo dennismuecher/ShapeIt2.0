@@ -1,0 +1,11 @@
+# Test efficiency correction file
+# Ex [keV]    correction_factor
+3000          0.90
+3500          0.93
+4000          0.96
+4500          0.99
+5000          1.02
+5500          4.0
+6000          5.0
+6500          5.0
+7000          5.0

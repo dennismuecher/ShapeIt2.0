@@ -1,0 +1,44 @@
+/Users/dmuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt/ShapeIt1.0/Analysis/88Kr/Raw/Kr88.root
+
+
+matrixName matrixsub
+MeV: 1
+mode 2
+doInterpol 0
+doOslo 0
+alphaLimit -1 1
+alphaIter 100
+doEffi 0
+doAutoScale 0
+colour 1
+doGRF 0
+displayAverage 0
+displaySingle 1
+doSlidingWindow 0
+doBinVariation 0
+doBackground 1
+verbose 0
+gSF_norm 0.012
+lit_norm 1
+lit_alpha 0
+lit_alpha_error 0 0
+level1 694 897
+level1_2 0 0
+bg_level1 638.14 694.021 895.452 970.827
+bg_level2 1417.88 1493.25 1694.68 1750.56
+level2 1487 1696
+level2_2 0 0
+excitation 2500 7000
+excitationMCLimits 2000 3000
+excitation_bin_1 642
+excitation_bin_2 800
+nOfBins 7
+eff_corr 1
+minCounts 50
+doWidthCal 0
+widthCal 0 0 0 0
+rhoFileName 
+rhoScale 1
+spinLow 0
+spinHigh 8
+discreteLevelFile  100

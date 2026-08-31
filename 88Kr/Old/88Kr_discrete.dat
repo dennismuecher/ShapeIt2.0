@@ -1,0 +1,39 @@
+/Users/dmuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt1.0/ShapeIt1.0/RawFiles/Kr88.root
+/Users/dmuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt1.0/ShapeIt1.0/OsloFiles/oslo_data_88Kr.txt
+
+matrixName matrix120
+MeV: 1
+mode 2
+doInterpol 1
+doOslo 1
+alphaLimit -1 1
+alphaIter 100
+doEffi 0
+doAutoScale 1
+colour 1
+doGRF 0
+displayAverage 1
+displaySingle 0
+doSlidingWindow 1
+doBinVariation 1
+doBackground 1
+verbose 1
+gSF_norm 1.56017
+lit_norm 1
+lit_alpha 0
+level1 685 900
+level1_2 0 0
+bg_level1 563.434 662.935 924.699 1036.08
+bg_level2 1394.09 1460.66 1760.5 1825.65
+level2 1497 1732
+level2_2 0 0
+excitation 3500 6700
+excitationMCLimits 3500 4500
+excitation_bin_1 320
+excitation_bin_2 533
+nOfBins 10
+eff_corr 1.45
+minCounts 200
+doWidthCal 0
+widthCal 24.556 6.59782e-05 33.8117 0.000759378
+rhoFileName  /Users/dmuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt1.0/ShapeIt1.0/88Kr/kr88rho_discrete.txt
