@@ -1,0 +1,2175 @@
+<!DOCTYPE html>
+<!--
+═══════════════════════════════════════════════════════════════════════════════
+ShapeIt 2.0 - Web Interface
+═══════════════════════════════════════════════════════════════════════════════
+
+This is the web-based user interface for the ShapeIt nuclear physics analysis tool.
+It provides a browser-based alternative to the native desktop application.
+
+Key components:
+  - Menu bar for file operations and settings management
+  - Sidebar with 4 tabs: Levels, Excitation & Bins, Projections, Options
+  - Main canvas area for JSROOT visualization of ROOT histograms
+  - Log panel at bottom for status messages and output
+  - File browser dialog for opening/saving files
+  - WebSocket connection to C++ backend for real-time communication
+
+The interface communicates with a C++ backend via WebSocket, sending commands
+and receiving updates. JSROOT library handles rendering of ROOT objects.
+
+FEATURES:
+  - Integration and Autofit modes for peak analysis
+  - Width calibration: Linear fit of peak widths vs energy to guide autofits
+  - Display options: Individual points, averages, color-coded peaks
+  - Settings persistence with modified/saved status tracking
+  - Real-time visualization of matrices, projections, and calibration plots
+
+CODE STRUCTURE:
+  1. HTML (lines ~30-300): UI structure with menu bar, sidebar tabs, canvas holder
+  2. JavaScript imports (lines ~305-310): JSROOT libraries for ROOT visualization
+  3. Global state (lines ~315-340): WebSocket handle, settings path, dirty flag
+  4. Settings management (lines ~345-390): Track and display save/modified status
+  5. Logging (lines ~395-410): Status bar and log panel updates
+  6. Canvas setup (lines ~415-430): JSROOT canvas initialization
+  7. UI interactions (lines ~435-550): Tab switching, menus, resize handle
+  8. File browser (lines ~555-650): Modal dialog for open/save operations
+  9. WebSocket message handling (lines ~655-780): Server communication protocol
+  10. Event handlers (lines ~785-end): Input changes trigger server updates
+
+COMMUNICATION PROTOCOL:
+  - Frontend -> Backend: Commands like "RUN:", "OPEN:", "SAVE_SETTINGS:", etc.
+  - Backend -> Frontend: "SETTINGS_SYNC:", "DIRLIST:", "LOG:", "NBINS:", etc.
+  - All changes mark settings as dirty and send updates immediately
+  - Width calibration: "SHOW_WIDTH_CALIB" / "WIDTH_CALIB_AVAILABLE:<0|1>"
+
+═══════════════════════════════════════════════════════════════════════════════
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>ShapeIt 2.0</title>
+<!-- do not remove next line, required for JSROOT modules map (RWebWindow injects the real import map here when serving this page) -->
+<!--jsroot_importmap-->
+<!-- External stylesheet -->
+<link rel="stylesheet" href="webshapeit-styles.css">
+</head>
+<body>
+<!-- Crash banner: shown when WebSocket disconnects unexpectedly -->
+<div id="crash-banner">Connection to ROOT was lost. The application may have crashed -- check your terminal.</div>
+
+<div id="app">
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       MENU BAR - File, Settings, Display menus + settings filename display
+       ═══════════════════════════════════════════════════════════════════ -->
+  <div id="menubar">
+    <div class="menu">
+      <button class="menu-label" data-menu="file">File</button>
+      <div class="menu-dropdown" data-menu="file">
+        <button class="menu-item" id="btn-open">Open matrix...</button>
+        <div class="menu-divider"></div>
+        <button class="menu-item" id="btn-exit">Exit</button>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="menu-label" data-menu="settings">Settings</button>
+      <div class="menu-dropdown" data-menu="settings">
+        <button class="menu-item" id="btn-load-settings">Open settings...</button>
+        <button class="menu-item" id="btn-save-settings">Save settings</button>
+        <button class="menu-item" id="btn-save-settings-as">Save settings as...</button>
+        <div class="menu-divider"></div>
+        <button class="menu-item" id="btn-oslo">Load gSF literature (Oslo) data...</button>
+        <button class="menu-item" id="btn-rho">Load NLD literature (Oslo) data...</button>
+        <button class="menu-item" id="btn-discrete">Load discrete levels data...</button>
+        <button class="menu-item" id="btn-effi">Load eff-corr file...</button>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="menu-label" data-menu="display">Display</button>
+      <div class="menu-dropdown" data-menu="display">
+        <label class="menu-item toggle-item" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+          <span>Verbose output</span>
+          <input type="checkbox" id="verbose-toggle" style="margin: 0;">
+        </label>
+        <div class="menu-divider"></div>
+        <button class="menu-item" id="btn-show-width-calib">Show width calibration...</button>
+        <button class="menu-item" id="btn-show-level-density">Show level density...</button>
+        <button class="menu-item" id="btn-show-discrete-levels">Show discrete levels...</button>
+        <button class="menu-item" id="btn-show-settings-file">Show settings file...</button>
+        <button class="menu-item" id="btn-show-gsf-results">Show gSF results...</button>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="menu-label" data-menu="transformation">Transformation</button>
+      <div class="menu-dropdown" data-menu="transformation">
+        <button class="menu-item" id="btn-slope-correction">Slope correction...</button>
+      </div>
+    </div>
+    <div id="settings-info">
+      <span id="settings-path">No settings file</span>
+      <span id="settings-status"></span>
+    </div>
+  </div>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       MAIN CONTENT - Canvas (left) and Sidebar (right)
+       ═══════════════════════════════════════════════════════════════════ -->
+  <div id="content-row">
+    <!-- JSROOT canvas for displaying ROOT histograms/plots -->
+    <div id="canvas_holder"></div>
+
+    <!-- SIDEBAR - 4 tabs: Levels, Excitation & Bins, Projections, Options -->
+    <div id="sidebar">
+      <div id="sidebar-tabs">
+        <button class="tab-btn active" data-tab="levels">Levels</button>
+        <button class="tab-btn" data-tab="excitation">Excitation &amp; Bins</button>
+        <button class="tab-btn" data-tab="projections">Projections</button>
+        <button class="tab-btn" data-tab="options">Options</button>
+      </div>
+
+      <button class="btn-run" style="margin: 12px 12px 8px 12px; width: calc(100% - 24px);">ShapeIt!</button>
+
+      <div id="sidebar-scroll">
+
+        <!-- TAB 1: Levels - Define fit regions and peak positions for Level 1, Level 2, and backgrounds -->
+        <div id="panel-levels">
+          <h3>Levels</h3>
+
+          <div class="section-label">
+            <span>Level 1 fit region</span>
+          </div>
+          <div class="field-row">
+            <input type="number" id="lvl1-lo" value="685">
+            <span>to</span>
+            <input type="number" id="lvl1-hi" value="900">
+            <span>keV</span>
+          </div>
+
+          <!-- Peak 1 (always active) -->
+          <div style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
+            <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 6px;">Peak 1</div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label style="font-size: 12px; margin: 0; width: 70px;">Position:</label>
+                <input type="number" id="peakPos1" value="792" step="0.1" style="width: 80px; padding: 4px;">
+                <span style="font-size: 12px;">keV</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="fixPeakPos1" style="margin: 0;">
+                <label style="font-size: 12px; margin: 0;">Fix position</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Peak 2 (toggleable) -->
+          <div style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <input type="checkbox" id="enablePeak2L1" style="margin: 0;">
+              <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 2</div>
+            </div>
+            <div id="peak2L1-fields" style="display: none;">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label style="font-size: 12px; margin: 0; width: 70px;">Position:</label>
+                  <input type="number" id="peakPos2L1" value="940" step="0.1" style="width: 80px; padding: 4px;">
+                  <span style="font-size: 12px;">keV</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input type="checkbox" id="fixPeakPos2L1" style="margin: 0;">
+                  <label style="font-size: 12px; margin: 0;">Fix position</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Peak 3 (toggleable) -->
+          <div style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <input type="checkbox" id="enablePeak3L1" style="margin: 0;">
+              <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 3</div>
+            </div>
+            <div id="peak3L1-fields" style="display: none;">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label style="font-size: 12px; margin: 0; width: 70px;">Position:</label>
+                  <input type="number" id="peakPos3L1" value="1000" step="0.1" style="width: 80px; padding: 4px;">
+                  <span style="font-size: 12px;">keV</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input type="checkbox" id="fixPeakPos3L1" style="margin: 0;">
+                  <label style="font-size: 12px; margin: 0;">Fix position</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Keep widths equal -->
+          <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px;">
+            <input type="checkbox" id="keepWidthsEqual1" checked style="margin: 0;" disabled>
+            <span id="keepWidthsEqual1-label" style="color: #999;">Keep widths equal</span>
+          </label>
+
+          <div class="section-label" style="margin-top: 20px;">
+            <span>Level 2 fit region</span>
+          </div>
+          <div class="field-row">
+            <input type="number" id="lvl2-lo" value="1497">
+            <span>to</span>
+            <input type="number" id="lvl2-hi" value="1732">
+            <span>keV</span>
+          </div>
+
+          <!-- Peak 1 (always active) -->
+          <div style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
+            <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 6px;">Peak 1</div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label style="font-size: 12px; margin: 0; width: 70px;">Position:</label>
+                <input type="number" id="peakPos2" value="1614" step="0.1" style="width: 80px; padding: 4px;">
+                <span style="font-size: 12px;">keV</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="fixPeakPos2" style="margin: 0;">
+                <label style="font-size: 12px; margin: 0;">Fix position</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Peak 2 (toggleable) -->
+          <div style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <input type="checkbox" id="enablePeak2L2" style="margin: 0;">
+              <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 2</div>
+            </div>
+            <div id="peak2L2-fields" style="display: none;">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label style="font-size: 12px; margin: 0; width: 70px;">Position:</label>
+                  <input type="number" id="peakPos2L2" value="1770" step="0.1" style="width: 80px; padding: 4px;">
+                  <span style="font-size: 12px;">keV</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input type="checkbox" id="fixPeakPos2L2" style="margin: 0;">
+                  <label style="font-size: 12px; margin: 0;">Fix position</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Peak 3 (toggleable) -->
+          <div style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <input type="checkbox" id="enablePeak3L2" style="margin: 0;">
+              <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 3</div>
+            </div>
+            <div id="peak3L2-fields" style="display: none;">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label style="font-size: 12px; margin: 0; width: 70px;">Position:</label>
+                  <input type="number" id="peakPos3L2" value="1830" step="0.1" style="width: 80px; padding: 4px;">
+                  <span style="font-size: 12px;">keV</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input type="checkbox" id="fixPeakPos3L2" style="margin: 0;">
+                  <label style="font-size: 12px; margin: 0;">Fix position</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Keep widths equal -->
+          <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px;">
+            <input type="checkbox" id="keepWidthsEqual2" checked style="margin: 0;" disabled>
+            <span id="keepWidthsEqual2-label" style="color: #999;">Keep widths equal</span>
+          </label>
+
+          <div class="section-label"><span>Background (Level 1)</span></div>
+          <div class="bg-box">
+            <div class="field-row">
+              <input type="number" id="bg1-lo1" value="260">
+              <span>to</span>
+              <input type="number" id="bg1-hi1" value="360">
+              <span>keV</span>
+            </div>
+            <div class="field-row" style="margin-bottom: 0;">
+              <input type="number" id="bg1-lo2" value="700">
+              <span>to</span>
+              <input type="number" id="bg1-hi2" value="800">
+              <span>keV</span>
+            </div>
+          </div>
+
+          <div class="section-label"><span>Background (Level 2)</span></div>
+          <div class="bg-box">
+            <div class="field-row">
+              <input type="number" id="bg2-lo1" value="850">
+              <span>to</span>
+              <input type="number" id="bg2-hi1" value="950">
+              <span>keV</span>
+            </div>
+            <div class="field-row" style="margin-bottom: 0;">
+              <input type="number" id="bg2-lo2" value="1350">
+              <span>to</span>
+              <input type="number" id="bg2-hi2" value="1450">
+              <span>keV</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: Excitation & Bins - Excitation range, bin size, scaling parameters -->
+        <div id="panel-excitation" style="display: none;">
+          <h3>Excitation &amp; Bins</h3>
+
+          <div class="section-label"><span>Excitation</span></div>
+          <div class="field-row">
+            <input type="number" id="exc-lo" value="3500">
+            <span>to</span>
+            <input type="number" id="exc-hi" value="6700">
+            <span>keV</span>
+          </div>
+
+          <p style="font-size: 13px; color: #555; margin: 14px 0 6px;">Bin size [keV]</p>
+          <div class="field-row">
+            <input type="number" id="binsize-lo" value="400">
+            <span>to</span>
+            <input type="number" id="binsize-hi" value="400" disabled>
+          </div>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 14px;">
+            <input type="checkbox" id="bin-variation"> Bin size variation
+          </label>
+
+          <p style="font-size: 13px; color: #555; margin: 0 0 6px;">Nr. of bins</p>
+          <div class="field-row">
+            <input type="number" id="nbins-lo" value="1">
+            <span>to</span>
+            <input type="number" id="nbins-hi" value="1" disabled>
+          </div>
+
+          <p style="font-size: 13px; color: #555; margin: 0 0 6px;">Min. counts</p>
+          <input type="number" id="min-counts" value="0" style="width: 100%; margin-bottom: 14px; box-sizing: border-box;">
+
+          <p style="font-size: 13px; color: #555; margin: 0 0 6px;">gSF scaling</p>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
+            <input type="number" id="gsf-scaling" value="1" style="width: 100px;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;">
+              <input type="checkbox" id="auto-scale"> Auto
+            </label>
+          </div>
+
+          <p style="font-size: 13px; color: #555; margin: 0 0 6px;">Efficiency correction</p>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <input type="number" id="eff-corr" value="1" style="width: 100px;">
+          </div>
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;" id="effi-file-label">
+            <input type="checkbox" id="use-effi-file" style="margin: 0;" disabled>
+            <span id="effi-file-text" style="color: #999;">Use energy-dependent file</span>
+          </label>
+          <div id="effi-filename-display" style="font-size: 11px; color: #666; margin-top: 4px; display: none;"></div>
+        </div>
+
+        <!-- TAB 3: Projections - View matrix, diagonal projection, or individual bins -->
+        <div id="panel-projections" style="display: none;">
+          <h3>Projections</h3>
+
+          <button class="proj-btn" id="btn-show-matrix">Matrix</button>
+          <button class="proj-btn" id="btn-show-proj">Diagonal projection (sum)</button>
+
+          <p style="font-size: 13px; color: #555; margin: 14px 0 6px;">Projection of bin</p>
+          <select id="bin-select" style="width: 100%; padding: 6px; box-sizing: border-box;" disabled></select>
+        </div>
+
+        <!-- TAB 4: Options - Matrix selection, mode, analysis options, display settings -->
+        <div id="panel-options" style="display: none;">
+          <h3>Options</h3>
+
+          <p style="font-size: 13px; color: #555; margin: 0 0 6px;">Matrix</p>
+          <select id="matrix-select" style="width: 100%; padding: 6px; box-sizing: border-box; margin-bottom: 16px;"></select>
+
+          <p style="font-size: 13px; color: #555; margin: 0 0 6px;">Mode</p>
+          <label class="mode-radio-row">
+            <input type="radio" name="mode-radio" id="mode-integration" value="1" checked> Integration
+          </label>
+          <label class="mode-radio-row" style="margin-bottom: 16px;">
+            <input type="radio" name="mode-radio" id="mode-autofit" value="2"> Autofit
+          </label>
+
+          <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+              <input type="checkbox" id="opt-interpol" checked> Sewing interpolation
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+              <input type="checkbox" id="opt-oslo"> Display expectation
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+              <input type="checkbox" id="opt-sliding"> Sliding window variation
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+              <input type="checkbox" id="opt-background"> Background subtraction
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;" id="width-calib-label">
+              <input type="checkbox" id="opt-width-calib"> Use width calibration
+            </label>
+            <p style="font-size: 12px; color: #666; margin: 0 0 0 26px; line-height: 1.3;">Fit peak widths vs energy to guide autofits (requires autofit mode + existing calibration data)</p>
+          </div>
+
+          <div style="margin: 20px 0 16px; padding: 12px; border: 2px solid #4a90e2; border-radius: 6px; background: #f8fbff;">
+            <p style="font-size: 14px; font-weight: 600; color: #2c3e50; margin: 0 0 12px; border-bottom: 1px solid #4a90e2; padding-bottom: 6px;">Display Options</p>
+            
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px;">
+              <input type="checkbox" id="opt-display-single" checked> Show individual data points
+            </label>
+            <p style="font-size: 11px; color: #666; margin: 0 0 12px 26px; line-height: 1.3;">Display individual gSF data points from each peak</p>
+            
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px;">
+              <input type="checkbox" id="opt-display-avg"> Show average values
+            </label>
+            <p style="font-size: 11px; color: #666; margin: 0 0 12px 26px; line-height: 1.3;">Display smoothed/averaged gSF data</p>
+            
+            <div style="padding-top: 8px; border-top: 1px solid #d0d0d0;">
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px;">
+                <input type="checkbox" id="opt-colour" checked> Different colors for peaks
+              </label>
+              <p style="font-size: 11px; color: #666; margin: 0 0 0 26px; line-height: 1.3;">Plot Peak 1 and Peak 2 in different colors (individual points only)</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 5: Width Calibration - Linear fit parameters for peak widths (hidden by default, shown via menu) -->
+        <div id="panel-width-calib" style="display: none;">
+          <h3>Width Calibration</h3>
+          
+          <p style="font-size: 12px; color: #666; margin: 0 0 14px; line-height: 1.4;">
+            Linear fit: width = offset + slope × E<sub>γ</sub>
+          </p>
+
+          <button id="btn-refresh-width-fits" style="width: 100%; padding: 10px; margin-bottom: 16px; background: #3a86ff; color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;">
+            Refresh Fits from Data
+          </button>
+
+          <div class="section-label"><span>Level 1</span></div>
+          <div style="margin-bottom: 16px;">
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+              <label style="font-size: 12px; width: 60px;">Offset:</label>
+              <input type="number" id="wc-l1-offset" value="0" step="0.01" style="width: 100px; padding: 4px;">
+              <span style="font-size: 12px;">keV</span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <label style="font-size: 12px; width: 60px;">Slope:</label>
+              <input type="number" id="wc-l1-slope" value="0" step="0.0001" style="width: 100px; padding: 4px;">
+            </div>
+          </div>
+
+          <div class="section-label"><span>Level 2</span></div>
+          <div style="margin-bottom: 20px;">
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+              <label style="font-size: 12px; width: 60px;">Offset:</label>
+              <input type="number" id="wc-l2-offset" value="0" step="0.01" style="width: 100px; padding: 4px;">
+              <span style="font-size: 12px;">keV</span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <label style="font-size: 12px; width: 60px;">Slope:</label>
+              <input type="number" id="wc-l2-slope" value="0" step="0.0001" style="width: 100px; padding: 4px;">
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 6: Slope Correction - Alpha transformation for gSF and NLD (hidden by default, shown via menu) -->
+        <div id="panel-slope-correction" style="display: none;">
+          <h3>Slope Correction</h3>
+          
+          <p style="font-size: 12px; color: #666; margin: 0 0 14px; line-height: 1.4;">
+            Apply slope transformation to gSF and level density using the α parameter.
+          </p>
+
+          <div class="section-label"><span>Transformation Parameter</span></div>
+          <div style="margin-bottom: 20px;">
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
+              <label style="font-size: 12px; width: 80px;">Slope Δα:</label>
+              <input type="number" id="alpha-slope" value="0" step="0.01" style="width: 100px; padding: 4px;">
+              <span style="font-size: 12px;">[1/MeV]</span>
+            </div>
+            <p style="font-size: 11px; color: #666; margin: 0 0 0 0; line-height: 1.3;">
+              Changes the slope of both gSF and NLD. Positive values increase slope.
+            </p>
+          </div>
+
+          <div class="section-label"><span>Normalization</span></div>
+          <div style="margin-bottom: 20px;">
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
+              <label style="font-size: 12px; width: 80px;">gSF scale B:</label>
+              <input type="number" id="lit-norm" value="1" step="0.01" style="width: 100px; padding: 4px;">
+            </div>
+            <p style="font-size: 11px; color: #666; margin: 0 0 0 0; line-height: 1.3;">
+              Scaling factor for literature gSF values.
+            </p>
+          </div>
+
+          <div class="section-label"><span>Monte Carlo Alpha Search</span></div>
+          <div style="margin-bottom: 20px;">
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+              <label style="font-size: 12px; width: 80px;">Iterations:</label>
+              <input type="number" id="mc-iterations" value="100" min="10" max="1000" style="width: 100px; padding: 4px;">
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+              <label style="font-size: 12px; width: 80px;">Ex low min:</label>
+              <input type="number" id="mc-exi-min" value="3000" step="100" style="width: 100px; padding: 4px;">
+              <span style="font-size: 11px;">keV</span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
+              <label style="font-size: 12px; width: 80px;">Ex low max:</label>
+              <input type="number" id="mc-exi-max" value="5000" step="100" style="width: 100px; padding: 4px;">
+              <span style="font-size: 11px;">keV</span>
+            </div>
+            <button id="btn-run-mc" style="width: 100%; padding: 8px; background: #ff9800; color: white; border: none; border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer;">
+              Find Best Δα
+            </button>
+            <p style="font-size: 11px; color: #666; margin: 10px 0 0 0; line-height: 1.3;">
+              Varies lower excitation boundary to find optimal slope correction. Results displayed in separate window.
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Resize handle for dragging log panel height -->
+  <div id="resize-handle"></div>
+
+  <!-- LOG PANEL - Status messages and analysis output -->
+  <div id="logpanel">
+    <div id="logpanel-header">
+      <span style="flex: 1;">Messages</span>
+      <span id="status-logpanel" style="margin-right: 12px; color: #9ab;">Connecting...</span>
+      <button id="btn-close-log">Clear</button>
+    </div>
+    <div id="logpanel-content"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     FILE BROWSER MODAL - For opening/saving files (matrix, settings, oslo)
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="filebrowser-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; z-index: 1000;">
+  <div style="background: #fff; width: 520px; max-height: 70vh; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; box-sizing: border-box;">
+    <h3 id="fb-title" style="margin: 0 0 10px;">Select a file</h3>
+    <div id="fb-format-desc" style="display: none; font-size: 12px; color: #666; margin-bottom: 8px; padding: 6px 8px; background: #f0f8ff; border-left: 3px solid #3a86ff; border-radius: 3px;"></div>
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+      <button id="fb-up">Up</button>
+      <input type="text" id="fb-path" style="flex: 1; padding: 5px;">
+      <button id="fb-go">Go</button>
+    </div>
+    <div id="fb-list" style="flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px; min-height: 240px;"></div>
+    <div id="fb-savebar" style="display: none; margin-top: 10px; gap: 8px; align-items: center;">
+      <input type="text" id="fb-filename" placeholder="filename.txt" style="flex: 1; padding: 5px;">
+      <button id="fb-save-confirm">Save</button>
+    </div>
+    <div style="margin-top: 10px; text-align: right;">
+      <button id="fb-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     EXIT DIALOG MODAL - Prompt to save changes before exiting
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="exit-dialog-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; z-index: 1001;">
+  <div style="background: #fff; width: 440px; border-radius: 8px; padding: 20px; box-sizing: border-box;">
+    <h3 style="margin: 0 0 12px; font-size: 16px;">Unsaved Changes</h3>
+    <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.5;">You have unsaved changes to your settings. What would you like to do?</p>
+    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+      <button id="exit-discard" style="padding: 8px 16px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer;">Discard Changes</button>
+      <button id="exit-save-current" style="padding: 8px 16px; font-size: 13px; border: 1px solid #3a86ff; border-radius: 4px; background: #fff; color: #3a86ff; cursor: pointer; display: none;">Save</button>
+      <button id="exit-save-as" style="padding: 8px 16px; font-size: 13px; border: 1px solid #3a86ff; border-radius: 4px; background: #fff; color: #3a86ff; cursor: pointer;">Save As...</button>
+      <button id="exit-cancel" style="padding: 8px 16px; font-size: 13px; border: none; border-radius: 4px; background: #3a86ff; color: #fff; cursor: pointer;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       VERSION UPGRADE DIALOG - Prompt when saving old format files
+       ═══════════════════════════════════════════════════════════════════ -->
+  <div id="version-dialog-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; z-index: 1002;">
+    <div style="background: #fff; width: 480px; border-radius: 8px; padding: 20px; box-sizing: border-box;">
+      <h3 style="margin: 0 0 12px; font-size: 16px;">Settings File Format</h3>
+      <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.5;">
+        This settings file uses the ShapeIt 1.0 format. Would you like to upgrade to the ShapeIt 2.0 format?
+      </p>
+      <p style="margin: 0 0 20px; font-size: 13px; line-height: 1.4; color: #666;">
+        <strong>ShapeIt 2.0 format:</strong> Includes version information for better compatibility tracking.<br>
+        <strong>ShapeIt 1.0 format:</strong> Compatible with the original ShapeIt application.
+      </p>
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button id="version-keep-old" style="padding: 8px 16px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer;">Keep 1.0 Format</button>
+        <button id="version-upgrade" style="padding: 8px 16px; font-size: 13px; border: none; border-radius: 4px; background: #3a86ff; color: #fff; cursor: pointer;">Upgrade to 2.0</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SETTINGS FILE VIEWER - Display settings file content and gSF results
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="settings-viewer-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; z-index: 1003;">
+  <div style="background: #fff; width: 600px; max-height: 80vh; border-radius: 8px; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column;">
+    <h3 id="settings-viewer-title" style="margin: 0 0 12px; font-size: 16px;">Settings File</h3>
+    <pre id="settings-viewer-content" style="flex: 1; overflow-y: auto; margin: 0 0 16px; padding: 12px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 12px; line-height: 1.4; white-space: pre-wrap;"></pre>
+    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+      <button id="settings-viewer-close" style="padding: 8px 16px; font-size: 13px; border: none; border-radius: 4px; background: #3a86ff; color: #fff; cursor: pointer;">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     UNIT CONVERSION WARNING - Shown when MeV file is auto-converted
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="unit-warning-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1004;">
+  <div style="background: #fff; width: 480px; border-radius: 8px; padding: 24px; box-sizing: border-box; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+      <div style="width: 48px; height: 48px; background: #ff9800; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0;">⚠️</div>
+      <h3 style="margin: 0; font-size: 18px; color: #333;">Unit Conversion Applied</h3>
+    </div>
+    <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 16px; margin-bottom: 16px;">
+      <p style="margin: 0 0 12px; font-size: 14px; line-height: 1.5; color: #333;">
+        <strong>NLD file detected in MeV units</strong>
+      </p>
+      <p id="unit-warning-details" style="margin: 0 0 12px; font-size: 13px; line-height: 1.4; color: #555;">
+        Maximum energy detected: <strong id="unit-warning-maxE">0.00</strong> MeV
+      </p>
+      <p style="margin: 0; font-size: 13px; line-height: 1.4; color: #555;">
+        The file has been automatically converted to keV for internal consistency with the application.
+      </p>
+    </div>
+    <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px; margin-bottom: 20px; border-radius: 4px;">
+      <p style="margin: 0; font-size: 12px; line-height: 1.4; color: #1565c0;">
+        <strong>ℹ️ Note:</strong> All future files should use keV units for energy and keV⁻¹ for level density. Legacy MeV files are automatically converted.
+      </p>
+    </div>
+    <div style="text-align: right;">
+      <button id="unit-warning-ok" style="padding: 10px 24px; font-size: 14px; font-weight: 600; border: none; border-radius: 4px; background: #ff9800; color: #fff; cursor: pointer; transition: background 0.2s;">OK</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // IMPORTS - JSROOT library for rendering ROOT histograms in browser
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  let connectWebWindow, TCanvasPainter, settings;
+  
+  try {
+    const webwindowModule = await import('jsroot/webwindow');
+    connectWebWindow = webwindowModule.connectWebWindow;
+    
+    const jsrootModule = await import('jsroot');
+    TCanvasPainter = jsrootModule.TCanvasPainter;
+    settings = jsrootModule.settings;
+  } catch (error) {
+    console.error('FATAL: Failed to load JSROOT modules:', error);
+    const statusLogpanel = document.getElementById('status-logpanel');
+    if (statusLogpanel) statusLogpanel.innerText = 'ERROR: Failed to load JSROOT';
+    document.getElementById('crash-banner').style.display = 'block';
+    document.getElementById('crash-banner').textContent = 'Failed to load JSROOT library. Make sure you are running this through ROOT\'s web server (root WebShapeIt.cxx)';
+    throw error;
+  }
+
+  settings.ZoomWheel = false;  // Disable mouse wheel zoom to prevent accidents
+
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // GLOBAL STATE - WebSocket handle, settings file path, and dirty tracking
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  let conn_handle = null;           // WebSocket connection to C++ backend
+  let currentSettingsPath = null;   // Full path to loaded settings file
+  let startDir = '';                // Initial directory for file browser
+  let settingsDirty = false;        // True if settings changed since last save
+  let widthCalibAvailable = false;  // True if width calibration data exists
+  let pendingSavePath = null;       // Path for pending save (used by version dialog)
+  let effiFileName = '';            // Efficiency correction file path
+  let hasEffiFile = false;          // True if efficiency file is loaded
+
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // SETTINGS STATE - Track and display save/modified status in menubar
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  // Mark settings as modified → shows "(modified)" in yellow
+  function markSettingsDirty() {
+    settingsDirty = true;
+    updateSettingsDisplay();
+  }
+
+  // Mark settings as clean (just saved/loaded) → shows "(saved)"
+  function markSettingsClean() {
+    settingsDirty = false;
+    updateSettingsDisplay();
+  }
+
+  // Update menubar to show filename and save status
+  function updateSettingsDisplay() {
+    const pathEl = document.getElementById('settings-path');
+    const statusEl = document.getElementById('settings-status');
+    
+    if (currentSettingsPath) {
+      const filename = currentSettingsPath.split('/').pop();
+      pathEl.textContent = filename;
+      
+      if (settingsDirty) {
+        statusEl.textContent = '(modified)';
+        statusEl.className = 'modified';
+      } else {
+        statusEl.textContent = '(saved)';
+        statusEl.className = '';
+      }
+    } else {
+      pathEl.textContent = 'No settings file';
+      statusEl.textContent = '';
+      statusEl.className = '';
+    }
+  }
+
+  // Update width calibration checkbox state based on availability
+  function updateWidthCalibState() {
+    const checkbox = document.getElementById('opt-width-calib');
+    const label = document.getElementById('width-calib-label');
+    const showBtn = document.getElementById('btn-show-width-calib');
+    
+    if (widthCalibAvailable) {
+      checkbox.disabled = false;
+      label.style.color = '';
+      showBtn.disabled = false;
+    } else {
+      checkbox.disabled = true;
+      checkbox.checked = false;
+      label.style.color = '#999';
+      showBtn.disabled = true;
+    }
+  }
+
+  // Update efficiency file checkbox state based on file availability
+  function updateEffiState() {
+    const checkbox = document.getElementById('use-effi-file');
+    const label = document.getElementById('effi-file-text');
+    const constField = document.getElementById('eff-corr');
+    const filenameDisplay = document.getElementById('effi-filename-display');
+    
+    if (hasEffiFile) {
+      checkbox.disabled = false;
+      label.style.color = '';
+      
+      // Show filename
+      const filename = effiFileName.split('/').pop();
+      filenameDisplay.textContent = '📄 ' + filename;
+      filenameDisplay.style.display = 'block';
+      
+      // If checkbox is enabled, grey out constant field
+      if (checkbox.checked) {
+        constField.disabled = true;
+        constField.style.background = '#f5f5f5';
+      } else {
+        constField.disabled = false;
+        constField.style.background = '';
+      }
+    } else {
+      checkbox.disabled = true;
+      checkbox.checked = false;
+      label.style.color = '#999';
+      constField.disabled = false;
+      constField.style.background = '';
+      filenameDisplay.style.display = 'none';
+    }
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // LOGGING - Add timestamped messages to status bar and log panel
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  function setStatus(msg) {
+    // Update only log panel status and content
+    document.getElementById('status-logpanel').innerText = msg;
+    
+    const log = document.getElementById('logpanel-content');
+    const time = new Date().toLocaleTimeString();
+    const line = document.createElement('div');
+    line.textContent = '[' + time + '] ' + msg;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;  // Auto-scroll to bottom
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // CANVAS SETUP - Initialize JSROOT canvas for displaying ROOT plots
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  function embedCanvas(handle) {
+    const conn = handle.createChannel();
+    const dom = document.getElementById('canvas_holder');
+    const painter = new TCanvasPainter(dom, null);
+    
+    painter.online_canvas = true;   // Live mode (updates from server)
+    painter.embed_canvas = true;
+    painter.use_openui = false;
+    
+    painter.useWebsocket(conn);
+    handle.send('channel:' + conn.getChannelId());  // Tell server which channel to use
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // LOG PANEL RESIZING - Drag handle to adjust height
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  const resizeHandle = document.getElementById('resize-handle');
+  const logPanel = document.getElementById('logpanel');
+  
+  let isResizing = false;
+  let startY = 0;
+  let startHeight = 0;
+  
+  resizeHandle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    startY = e.clientY;
+    startHeight = logPanel.offsetHeight;
+    e.preventDefault();
+  });
+  
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    const deltaY = startY - e.clientY;  // Up = positive, down = negative
+    const newHeight = Math.max(60, Math.min(600, startHeight + deltaY));
+    logPanel.style.height = newHeight + 'px';
+  });
+  
+  document.addEventListener('mouseup', () => {
+    isResizing = false;
+  });
+
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // SIDEBAR TABS - Switch between Levels, Excitation & Bins, Projections, Options
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  const tabs = {
+    levels: { el: document.getElementById('panel-levels') },
+    excitation: { el: document.getElementById('panel-excitation') },
+    projections: { el: document.getElementById('panel-projections') },
+    options: { el: document.getElementById('panel-options') },
+    'width-calib': { el: document.getElementById('panel-width-calib') },
+    'slope-correction': { el: document.getElementById('panel-slope-correction') },
+  };
+  
+  function showTab(name) {
+    Object.values(tabs).forEach(t => t.el.style.display = 'none');  // Hide all
+    tabs[name].el.style.display = 'block';  // Show selected
+    
+    // Update tab button styling
+    document.querySelectorAll('.tab-btn').forEach(b => 
+      b.classList.toggle('active', b.dataset.tab === name)
+    );
+  }
+  
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      showTab(btn.dataset.tab);
+      
+      // If switching to Projections tab, automatically show bin 1 projection
+      if (btn.dataset.tab === 'projections' && conn_handle) {
+        conn_handle.send('SHOWPROJ');
+        setStatus('Showing bin 1 projection');
+      }
+      
+      // If switching to Excitation & Bins tab, show matrix
+      if (btn.dataset.tab === 'excitation' && conn_handle) {
+        conn_handle.send('SHOWMATRIX');
+      }
+    });
+  });
+
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // MENUBAR - Dropdown menu behavior (File, Settings, Display)
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  let menuBarActive = false;  // Tracks if any menu is open (enables hover switching)
+  
+  function closeAllMenus() {
+    document.querySelectorAll('.menu-dropdown').forEach(d => d.classList.remove('open'));
+    document.querySelectorAll('.menu-label').forEach(l => l.classList.remove('open'));
+    menuBarActive = false;
+  }
+  
+  function openMenu(name) {
+    closeAllMenus();
+    const dropdown = document.querySelector('.menu-dropdown[data-menu="' + name + '"]');
+    const label = document.querySelector('.menu-label[data-menu="' + name + '"]');
+    dropdown.classList.add('open');
+    label.classList.add('open');
+    menuBarActive = true;
+  }
+  
+  // Click menu label to toggle open/closed
+  document.querySelectorAll('.menu-label').forEach(label => {
+    label.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const name = label.dataset.menu;
+      const dropdown = document.querySelector('.menu-dropdown[data-menu="' + name + '"]');
+      const wasOpen = dropdown.classList.contains('open');
+      closeAllMenus();
+      if (!wasOpen) openMenu(name);
+    });
+    
+    // Hover switches to other menus once one is open (native menubar behavior)
+    label.addEventListener('mouseenter', () => {
+      if (menuBarActive) openMenu(label.dataset.menu);
+    });
+  });
+  
+  document.addEventListener('click', closeAllMenus);  // Click outside closes menus
+  
+  // Prevent clicks inside dropdowns from closing them
+  document.querySelectorAll('.menu-dropdown').forEach(d => {
+    d.addEventListener('click', (e) => e.stopPropagation());
+  });
+
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // VERBOSE LEVEL - Control logging detail (Silent / Level 1 / Level 2)
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  document.getElementById('verbose-toggle').addEventListener('change', (e) => {
+    const level = e.target.checked ? 1 : 0;
+    if (conn_handle) conn_handle.send('VERBOSE:' + level);
+  });
+
+  // Show width calibration plot
+  document.getElementById('btn-show-width-calib').addEventListener('click', () => {
+    if (conn_handle) {
+      conn_handle.send('SHOW_WIDTH_CALIB');
+      showTab('width-calib');  // Switch to width calibration panel
+    }
+    closeAllMenus();
+  });
+
+  // Show level density plot
+  document.getElementById('btn-show-level-density').addEventListener('click', () => {
+    if (conn_handle) {
+      if (currentSettingsPath) {
+        conn_handle.send('SHOW_LEVEL_DENSITY');
+      } else {
+        setStatus('No settings file loaded');
+      }
+    }
+    closeAllMenus();
+  });
+
+  // Show discrete levels histogram
+  document.getElementById('btn-show-discrete-levels').addEventListener('click', () => {
+    if (conn_handle) {
+      conn_handle.send('SHOW_DISCRETE_LEVELS');
+    }
+    closeAllMenus();
+  });
+
+  // Show settings file content
+  document.getElementById('btn-show-settings-file').addEventListener('click', () => {
+    if (conn_handle) {
+      if (currentSettingsPath) {
+        conn_handle.send('SHOW_SETTINGS_FILE');
+      } else {
+        setStatus('No settings file loaded');
+      }
+    }
+    closeAllMenus();
+  });
+
+  // Show gSF results
+  document.getElementById('btn-show-gsf-results').addEventListener('click', () => {
+    if (conn_handle) {
+      conn_handle.send('SHOW_GSF_RESULTS');
+    }
+    closeAllMenus();
+  });
+
+  // Show slope correction panel
+  document.getElementById('btn-slope-correction').addEventListener('click', () => {
+    showTab('slope-correction');
+    closeAllMenus();
+  });
+
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // PROJECTIONS - Buttons to show matrix, diagonal projection, or specific bins
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  document.getElementById('btn-show-matrix').addEventListener('click', () => {
+    if (conn_handle) conn_handle.send('SHOWMATRIX');
+  });
+  
+  document.getElementById('btn-show-proj').addEventListener('click', () => {
+    if (conn_handle) {
+      setStatus('Showing bin 1 projection');
+      conn_handle.send('SHOWPROJ');
+    }
+  });
+  
+  // Bin selector dropdown (populated after running ShapeIt)
+  const binSelect = document.getElementById('bin-select');
+  let dropdownOpened = false;
+  
+  binSelect.addEventListener('change', (e) => {
+    if (conn_handle && e.target.value) {
+      conn_handle.send('SHOWBINPROJ:' + e.target.value);
+    }
+  });
+  
+  binSelect.addEventListener('mousedown', () => {
+    dropdownOpened = true;
+  });
+  
+  // Handle re-selecting the same option (still show it)
+  binSelect.addEventListener('blur', () => {
+    if (dropdownOpened && conn_handle && binSelect.value) {
+      setTimeout(() => {
+        conn_handle.send('SHOWBINPROJ:' + binSelect.value);
+      }, 10);
+    }
+    dropdownOpened = false;
+  });
+
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // FILE BROWSER - Modal dialog for opening/saving files
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  let fbMode = null;          // 'open-matrix' | 'open-oslo' | 'open-rho' | 'open-settings' | 'save-settings' | 'save-settings-and-exit'
+  let fbCurrentPath = '';     // Current directory being displayed
+
+  function openFileBrowser(mode, title) {
+    fbMode = mode;
+    // Start in settings file directory if available, otherwise use start directory
+    if (currentSettingsPath) {
+      fbCurrentPath = currentSettingsPath.substring(0, currentSettingsPath.lastIndexOf('/')) || startDir;
+    } else {
+      fbCurrentPath = startDir;
+    }
+    document.getElementById('fb-title').textContent = title;
+    
+    // Set format description based on mode
+    const descEl = document.getElementById('fb-format-desc');
+    if (mode === 'open-oslo') {
+      descEl.textContent = 'Expected format: 3-column text file (energy [keV], gSF [keV⁻³], error [keV⁻³])';
+      descEl.style.display = 'block';
+    } else if (mode === 'open-rho') {
+      descEl.textContent = 'Expected format: 3-column text file (Ex [keV], rho [keV⁻¹], rho_error [keV⁻¹])';
+      descEl.style.display = 'block';
+    } else if (mode === 'open-discrete') {
+      descEl.textContent = 'Expected format: 2-column text file (Ex [keV], number_of_states_per_bin)';
+      descEl.style.display = 'block';
+    } else if (mode === 'open-effi') {
+      descEl.textContent = 'Expected format: 2-column text file (Ex [keV], correction_factor)';
+      descEl.style.display = 'block';
+    } else {
+      descEl.style.display = 'none';
+    }
+    
+    // Show filename input only for save modes
+    document.getElementById('fb-savebar').style.display = (mode === 'save-settings' || mode === 'save-settings-and-exit') ? 'flex' : 'none';
+    
+    document.getElementById('fb-list').innerHTML = '<div style="padding: 8px; color: #888;">Loading...</div>';
+    document.getElementById('filebrowser-overlay').style.display = 'flex';
+    
+    if (conn_handle) conn_handle.send('LISTDIR:' + fbCurrentPath);
+  }
+
+  function closeFileBrowser() {
+    document.getElementById('filebrowser-overlay').style.display = 'none';
+  }
+
+  // Render directory listing received from server
+  function renderDirListing(path, lines) {
+    fbCurrentPath = path;
+    document.getElementById('fb-path').value = path;
+    const list = document.getElementById('fb-list');
+    list.innerHTML = '';
+    
+    lines.forEach(line => {
+      if (!line) return;
+      const isDir = line[0] === 'D';
+      const name = line.slice(2);
+      const row = document.createElement('div');
+      row.textContent = (isDir ? '\u{1F4C1} ' : '\u{1F4C4} ') + name;
+      row.style.padding = '4px 6px';
+      row.style.cursor = 'pointer';
+      row.style.borderRadius = '3px';
+      row.addEventListener('mouseenter', () => row.style.background = '#eef');
+      row.addEventListener('mouseleave', () => row.style.background = '');
+      row.addEventListener('click', () => {
+        const fullPath = path.replace(/\/$/, '') + '/' + name;
+        if (isDir) {
+          conn_handle.send('LISTDIR:' + fullPath);
+        } else if (fbMode === 'save-settings') {
+          document.getElementById('fb-filename').value = name;
+        } else {
+          confirmSelection(fullPath);
+        }
+      });
+      list.appendChild(row);
+    });
+  }
+
+  // Handle file selection
+  function confirmSelection(fullPath) {
+    if (fbMode === 'open-matrix') conn_handle.send('OPEN:' + fullPath);
+    else if (fbMode === 'open-oslo') conn_handle.send('OSLO:' + fullPath);
+    else if (fbMode === 'open-rho') {
+      conn_handle.send('RHO:' + fullPath);
+      markSettingsDirty();
+    }
+    else if (fbMode === 'open-discrete') {
+      conn_handle.send('DISCRETE:' + fullPath);
+      markSettingsDirty();
+    }
+    else if (fbMode === 'open-effi') {
+      conn_handle.send('EFFI:' + fullPath);
+      effiFileName = fullPath;
+      hasEffiFile = true;
+      updateEffiState();
+      markSettingsDirty();
+    }
+    else if (fbMode === 'open-settings') {
+      conn_handle.send('LOAD_SETTINGS:' + fullPath);
+      currentSettingsPath = fullPath;
+      markSettingsClean();
+      updateSettingsDisplay();
+    }
+    closeFileBrowser();
+  }
+
+  // File browser button handlers
+  document.getElementById('fb-up').addEventListener('click', () => {
+    const parent = fbCurrentPath.replace(/\/[^/]*$/, '') || '/';
+    conn_handle.send('LISTDIR:' + parent);
+  });
+  
+  document.getElementById('fb-go').addEventListener('click', () => {
+    conn_handle.send('LISTDIR:' + document.getElementById('fb-path').value.trim());
+  });
+  
+  document.getElementById('fb-cancel').addEventListener('click', closeFileBrowser);
+  
+  document.getElementById('fb-save-confirm').addEventListener('click', () => {
+    const filename = document.getElementById('fb-filename').value.trim();
+    if (!filename) return;
+    const fullPath = fbCurrentPath.replace(/\/$/, '') + '/' + filename;
+    conn_handle.send('SAVE_SETTINGS:' + fullPath);
+    currentSettingsPath = fullPath;
+    markSettingsClean();
+    updateSettingsDisplay();
+    closeFileBrowser();
+    
+    if (fbMode === 'save-settings-and-exit') {
+      setTimeout(doExit, 100);  // Exit after brief delay
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // WEBSOCKET CONNECTION - Establishes communication with C++ backend
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  // Add timeout detection
+  const connectionTimeout = setTimeout(() => {
+    if (!conn_handle) {
+      setStatus('Connection timeout - Is ROOT running? Check browser console (F12) for details');
+      console.error('WebSocket connection timeout after 10 seconds');
+      console.error('Make sure you started the application with: root WebShapeIt.cxx');
+      document.getElementById('crash-banner').style.display = 'block';
+      document.getElementById('crash-banner').textContent = 'Connection timeout. Make sure ROOT is running (root WebShapeIt.cxx)';
+    }
+  }, 10000);
+  
+  connectWebWindow({
+    receiver: {
+      // Called when connection established
+      onWebsocketOpened(handle) {
+        clearTimeout(connectionTimeout);
+        conn_handle = handle;
+        setStatus('Connected.');
+        embedCanvas(handle);
+        updateWidthCalibState();  // Initialize width calibration state
+        updateEffiState();  // Initialize efficiency correction state
+      },
+      
+      // Process messages from server
+      onWebsocketMsg(handle, msg) {
+        if (typeof msg !== 'string') return;
+        
+        // Directory listing for file browser
+        if (msg.startsWith('DIRLIST:')) {
+          const body = msg.slice(8);
+          const lines = body.split('\n');
+          const path = lines.shift();
+          renderDirListing(path, lines);
+        }
+        
+        // Directory error
+        else if (msg.startsWith('DIRERROR:')) {
+          setStatus(msg.slice(9));
+        }
+        
+        // Matrix list for dropdown
+        else if (msg.startsWith('MATRIXLIST:')) {
+          const lines = msg.slice(11).split('\n');
+          const selectIndex = parseInt(lines.shift(), 10);
+          const sel = document.getElementById('matrix-select');
+          sel.innerHTML = '';
+          lines.forEach((name, i) => {
+            if (!name) return;
+            const opt = document.createElement('option');
+            opt.value = i + 1;
+            opt.textContent = name;
+            if (i + 1 === selectIndex) opt.selected = true;
+            sel.appendChild(opt);
+          });
+        }
+        
+        // Settings sync from server (when loading settings file)
+        // INDEX MAPPING (must match WebShapeIt.cxx SendSettingsSync):
+        // 0-3: levEne, 4-5: exiEne, 6-7: doDoublet, 8-9: fixDoubletWidth
+        // 10-11: doTriplet, 12-13: fixTripletWidth
+        // 14-21: options (interpol, oslo, sliding, background, minCounts, gSF_norm, autoScale, eff_corr)
+        // 22: mode, 23-30: bgEne ← CORRECTED!
+        // 31-33: display options, 34: doWidthCal, 35-37: bin variation, 38: verbose
+        // 39-42: widthCal, 43-44: lit_alpha/lit_norm
+        // 45-48: Peak 1 pos, 49-52: Peak 2 pos, 53-56: Peak 3 pos
+        else if (msg.startsWith('SETTINGS_SYNC:')) {
+          const v = msg.slice(14).split('|').map(Number);
+          
+          // Indices 0-5: Level and excitation energies
+          document.getElementById('lvl1-lo').value = v[0];
+          document.getElementById('lvl1-hi').value = v[1];
+          document.getElementById('lvl2-lo').value = v[2];
+          document.getElementById('lvl2-hi').value = v[3];
+          document.getElementById('exc-lo').value = v[4];
+          document.getElementById('exc-hi').value = v[5];
+          
+          // Indices 6-13: Multiplet settings
+          const hasDoublet1 = v[6] !== 0;
+          const hasDoublet2 = v[7] !== 0;
+          const hasTriplet1 = (v.length >= 12 && v[10] !== 0);
+          const hasTriplet2 = (v.length >= 12 && v[11] !== 0);
+          
+          document.getElementById('enablePeak2L1').checked = hasDoublet1;
+          document.getElementById('peak2L1-fields').style.display = hasDoublet1 ? 'block' : 'none';
+          document.getElementById('enablePeak2L2').checked = hasDoublet2;
+          document.getElementById('peak2L2-fields').style.display = hasDoublet2 ? 'block' : 'none';
+          
+          document.getElementById('enablePeak3L1').checked = hasTriplet1;
+          document.getElementById('peak3L1-fields').style.display = hasTriplet1 ? 'block' : 'none';
+          document.getElementById('enablePeak3L2').checked = hasTriplet2;
+          document.getElementById('peak3L2-fields').style.display = hasTriplet2 ? 'block' : 'none';
+          
+          document.getElementById('keepWidthsEqual1').checked = v[8] !== 0;
+          document.getElementById('keepWidthsEqual2').checked = v[9] !== 0;
+          
+          // Indices 14-21: Options
+          document.getElementById('opt-interpol').checked = v[14] !== 0;
+          document.getElementById('opt-oslo').checked = v[15] !== 0;
+          document.getElementById('opt-sliding').checked = v[16] !== 0;
+          document.getElementById('opt-background').checked = v[17] !== 0;
+          document.getElementById('min-counts').value = v[18];
+          document.getElementById('gsf-scaling').value = v[19];
+          document.getElementById('auto-scale').checked = v[20] !== 0;
+          document.getElementById('eff-corr').value = v[21];
+          
+          // Index 22: Mode
+          const mode = v[22];
+          document.getElementById('mode-integration').checked = (mode !== 2);
+          document.getElementById('mode-autofit').checked = (mode === 2);
+          
+          // Indices 23-30: Background energies (CORRECTED!)
+          document.getElementById('bg1-lo1').value = v[23];
+          document.getElementById('bg1-hi1').value = v[24];
+          document.getElementById('bg1-lo2').value = v[25];
+          document.getElementById('bg1-hi2').value = v[26];
+          document.getElementById('bg2-lo1').value = v[27];
+          document.getElementById('bg2-hi1').value = v[28];
+          document.getElementById('bg2-lo2').value = v[29];
+          document.getElementById('bg2-hi2').value = v[30];
+          
+          // Indices 31-33: Display options (CORRECTED!)
+          if (v.length >= 34) {
+            document.getElementById('opt-display-single').checked = v[31] !== 0;
+            document.getElementById('opt-display-avg').checked = v[32] !== 0;
+            document.getElementById('opt-colour').checked = v[33] !== 0;
+          }
+          
+          // Index 34: Width calibration (CORRECTED!)
+          if (v.length >= 35) {
+            document.getElementById('opt-width-calib').checked = v[34] !== 0;
+          }
+          
+          // Indices 35-37: Bin size variation (CORRECTED!)
+          if (v.length >= 38) {
+            const doBinVariation = v[35] !== 0;
+            document.getElementById('bin-variation').checked = doBinVariation;
+            document.getElementById('binsize-lo').value = v[36];
+            document.getElementById('binsize-hi').value = v[37];
+            document.getElementById('binsize-hi').disabled = !doBinVariation;
+            document.getElementById('nbins-hi').disabled = !doBinVariation;
+          }
+          
+          // Index 38: Verbose level (CORRECTED!)
+          if (v.length >= 39) {
+            const verboseLevel = v[38];
+            document.getElementById('verbose-toggle').checked = (verboseLevel !== 0);
+          }
+          
+          // Indices 39-42: Width calibration parameters (CORRECTED!)
+          if (v.length >= 43) {
+            document.getElementById('wc-l1-offset').value = v[39];
+            document.getElementById('wc-l1-slope').value = v[40];
+            document.getElementById('wc-l2-offset').value = v[41];
+            document.getElementById('wc-l2-slope').value = v[42];
+          }
+          
+          // Indices 43-44: Alpha transformation parameters (CORRECTED!)
+          if (v.length >= 45) {
+            document.getElementById('alpha-slope').value = v[43];
+            document.getElementById('lit-norm').value = v[44];
+          }
+          
+          // Indices 45-48: Peak 1 position settings (CORRECTED!)
+          if (v.length >= 49) {
+            const fixPeak1 = v[45] !== 0;
+            const peakPos1 = v[46];
+            const fixPeak2 = v[47] !== 0;
+            const peakPos2 = v[48];
+            
+            document.getElementById('fixPeakPos1').checked = fixPeak1;
+            document.getElementById('peakPos1').value = peakPos1;
+            document.getElementById('fixPeakPos2').checked = fixPeak2;
+            document.getElementById('peakPos2').value = peakPos2;
+          }
+          
+          // Indices 49-52: Peak 2 (doublet) position settings (CORRECTED!)
+          if (v.length >= 53) {
+            const fixPeakD1 = v[49] !== 0;
+            const peakPosD1 = v[50];
+            const fixPeakD2 = v[51] !== 0;
+            const peakPosD2 = v[52];
+            
+            document.getElementById('fixPeakPos2L1').checked = fixPeakD1;
+            document.getElementById('peakPos2L1').value = peakPosD1;
+            document.getElementById('fixPeakPos2L2').checked = fixPeakD2;
+            document.getElementById('peakPos2L2').value = peakPosD2;
+            
+            updateKeepWidthsEqualState(1);
+            updateKeepWidthsEqualState(2);
+          }
+          
+          // Indices 53-56: Peak 3 (triplet) position settings (CORRECTED!)
+          if (v.length >= 57) {
+            const fixPeakT1 = v[53] !== 0;
+            const peakPosT1 = v[54];
+            const fixPeakT2 = v[55] !== 0;
+            const peakPosT2 = v[56];
+            
+            document.getElementById('fixPeakPos3L1').checked = fixPeakT1;
+            document.getElementById('peakPos3L1').value = peakPosT1;
+            document.getElementById('fixPeakPos3L2').checked = fixPeakT2;
+            document.getElementById('peakPos3L2').value = peakPosT2;
+            
+            updateKeepWidthsEqualState(1);
+            updateKeepWidthsEqualState(2);
+          }
+        }
+        
+        // Starting directory
+        else if (msg.startsWith('STARTDIR:')) {
+          startDir = msg.slice(9);
+        }
+        
+        // Settings file path from backend (sent on startup)
+        else if (msg.startsWith('SETTINGS_PATH:')) {
+          const path = msg.slice(14);
+          if (path && path !== '') {
+            currentSettingsPath = path;
+            markSettingsClean();
+          }
+          updateSettingsDisplay();
+        }
+        
+        // Width calibration availability status
+        else if (msg.startsWith('WIDTH_CALIB_AVAILABLE:')) {
+          widthCalibAvailable = (msg.slice(22) === '1');
+          updateWidthCalibState();
+        }
+        
+        // Efficiency file info: EFFI_INFO:doEffi|filename
+        else if (msg.startsWith('EFFI_INFO:')) {
+          const parts = msg.slice(10).split('|');
+          const doEffi = (parts[0] === '1');
+          const filename = parts[1] || '';
+          
+          hasEffiFile = (filename !== '');
+          effiFileName = filename;
+          document.getElementById('use-effi-file').checked = doEffi;
+          updateEffiState();
+        }
+        
+        // Marker position update (sent when markers are dragged)
+        // Format: levEne0|levEne1|levEne2|levEne3|bg1_lo1|bg1_hi1|bg1_lo2|bg1_hi2|bg2_lo1|bg2_hi1|bg2_lo2|bg2_hi2
+        // Only updates position fields, NOT checkbox states
+        else if (msg.startsWith('MARKER_UPDATE:')) {
+          const v = msg.slice(14).split('|').map(Number);
+          document.getElementById('lvl1-lo').value = v[0];
+          document.getElementById('lvl1-hi').value = v[1];
+          document.getElementById('lvl2-lo').value = v[2];
+          document.getElementById('lvl2-hi').value = v[3];
+          
+          // Update background regions
+          document.getElementById('bg1-lo1').value = v[4];
+          document.getElementById('bg1-hi1').value = v[5];
+          document.getElementById('bg1-lo2').value = v[6];
+          document.getElementById('bg1-hi2').value = v[7];
+          document.getElementById('bg2-lo1').value = v[8];
+          document.getElementById('bg2-hi1').value = v[9];
+          document.getElementById('bg2-lo2').value = v[10];
+          document.getElementById('bg2-hi2').value = v[11];
+        }
+        
+        // Bin count update (after running ShapeIt)
+        else if (msg.startsWith('NBINS:')) {
+          const parts = msg.slice(6).split('|').map(Number);
+          const [sizeLo, sizeHi, nLo, nHi] = parts;
+          document.getElementById('binsize-lo').value = sizeLo;
+          document.getElementById('binsize-hi').value = sizeHi;
+          document.getElementById('nbins-lo').value = nLo;
+          document.getElementById('nbins-hi').value = nHi;
+          
+          const sel = document.getElementById('bin-select');
+          sel.innerHTML = '';
+          for (let i = 1; i <= nLo; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = 'bin ' + i;
+            if (i === 1) opt.selected = true;
+            sel.appendChild(opt);
+          }
+          sel.disabled = (nLo < 1);
+        }
+        
+        // Single log line
+        else if (msg.startsWith('LOG:')) {
+          const log = document.getElementById('logpanel-content');
+          const line = document.createElement('div');
+          line.textContent = msg.slice(4);
+          log.appendChild(line);
+          log.scrollTop = log.scrollHeight;
+        }
+        
+        // Batched log output
+        else if (msg.startsWith('LOGBATCH:')) {
+          const log = document.getElementById('logpanel-content');
+          const lines = msg.slice(9).split('\n');
+          const fragment = document.createDocumentFragment();
+          for (const text of lines) {
+            if (text) {
+              const line = document.createElement('div');
+              line.textContent = text;
+              fragment.appendChild(line);
+            }
+          }
+          log.appendChild(fragment);
+          log.scrollTop = log.scrollHeight;
+        }
+        
+        // Prompt for version upgrade
+        else if (msg.startsWith('PROMPT_VERSION_UPGRADE:')) {
+          const path = msg.slice(23);
+          showVersionDialog(path);
+        }
+        
+        // Settings file content
+        else if (msg.startsWith('SETTINGS_FILE_CONTENT:')) {
+          const content = msg.slice(22);
+          showSettingsViewer(content);
+        }
+        
+        // gSF results text
+        else if (msg.startsWith('GSF_RESULTS:')) {
+          const rest = msg.substring(12);  // Remove "GSF_RESULTS:"
+          const colonPos = rest.indexOf(':');
+          const status = rest.substring(0, colonPos);
+          const content = rest.substring(colonPos + 1);
+          
+          if (status === 'ERROR') {
+            setStatus(content);
+          } else if (status === 'SUCCESS') {
+            showSettingsViewer(content, 'gSF Results');
+          }
+        }
+        
+        // Width calibration parameters (silent update - no status display)
+        else if (msg.startsWith('WIDTH_CALIB_PARAMS:')) {
+          const v = msg.slice(19).split('|').map(Number);
+          if (v.length === 4) {
+            document.getElementById('wc-l1-offset').value = v[0];
+            document.getElementById('wc-l1-slope').value = v[1];
+            document.getElementById('wc-l2-offset').value = v[2];
+            document.getElementById('wc-l2-slope').value = v[3];
+          }
+        }
+        
+        // Unit conversion warning (MeV to keV)
+        else if (msg.startsWith('UNIT_WARNING:')) {
+          const maxEnergy = parseFloat(msg.slice(13));
+          showUnitWarning(maxEnergy);
+          setStatus('NLD file converted from MeV to keV (max energy: ' + maxEnergy.toFixed(2) + ' MeV)');
+        }
+        
+        // Monte Carlo started
+        else if (msg === 'MC_STARTED') {
+          mcRunning = true;
+          mcButton.textContent = 'Stop Simulation';
+          mcButton.style.background = '#f44336';  // Red for stop
+          setStatus('Monte Carlo simulation running...');
+        }
+        
+        // Monte Carlo stopping
+        else if (msg === 'MC_STOPPING') {
+          setStatus('Stopping Monte Carlo simulation...');
+        }
+        
+        // Monte Carlo stopped early (no results or incomplete)
+        else if (msg.startsWith('MC_STOPPED:')) {
+          mcRunning = false;
+          mcButton.textContent = 'Find Best Δα';
+          mcButton.style.background = '#ff9800';  // Orange (original color)
+          const reason = msg.slice(11);
+          setStatus('Monte Carlo stopped: ' + reason);
+        }
+        
+        // Monte Carlo result (simulation complete)
+        else if (msg.startsWith('MC_RESULT:')) {
+          mcRunning = false;
+          mcButton.textContent = 'Find Best Δα';
+          mcButton.style.background = '#ff9800';  // Orange (original color)
+          const v = msg.slice(10).split('|').map(Number);
+          const bestAlpha = v[0];
+          const bestChi2 = v[1];
+          
+          // Update the input field to show the best alpha
+          document.getElementById('alpha-slope').value = bestAlpha.toFixed(3);
+          
+          // Send alpha to backend WITHOUT triggering a redraw
+          // The backend will store this value and use it for the next ShapeIt run
+          // We send the message after a brief delay to ensure MC results are fully displayed first
+          setTimeout(() => {
+            if (conn_handle) {
+              const litNorm = document.getElementById('lit-norm').value;
+              // Send the update - this will set sett->lit_alpha but won't trigger RunShapeIt
+              conn_handle.send('ALPHA_TRANSFORM:' + bestAlpha + '|' + litNorm);
+            }
+          }, 500);  // 500ms delay ensures MC plot is fully rendered
+          
+          setStatus('Monte Carlo complete: Best α = ' + bestAlpha.toFixed(3) + ', χ² = ' + bestChi2.toFixed(2) + ' (will be applied on next ShapeIt run)');
+        }
+        
+        // Generic status message
+        else {
+          setStatus(msg);
+        }
+      },
+      
+      // Called when connection lost
+      onWebsocketClosed() {
+        conn_handle = null;
+        setStatus('Disconnected.');
+        document.getElementById('crash-banner').style.display = 'block';
+      },
+    },
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // UI EVENT HANDLERS - Send updates to server when inputs change
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  // Clear log button
+  document.getElementById('btn-close-log').addEventListener('click', () => {
+    document.getElementById('logpanel-content').innerHTML = '';
+  });
+
+  // NEW: Enable/disable Peak 2 and Peak 3 for Level 1
+  document.getElementById('enablePeak2L1').addEventListener('change', (e) => {
+    document.getElementById('peak2L1-fields').style.display = e.target.checked ? 'block' : 'none';
+    updateKeepWidthsEqualState(1);
+    sendNewPeakConfig();
+  });
+  document.getElementById('enablePeak3L1').addEventListener('change', (e) => {
+    document.getElementById('peak3L1-fields').style.display = e.target.checked ? 'block' : 'none';
+    updateKeepWidthsEqualState(1);
+    sendNewPeakConfig();
+  });
+
+  // NEW: Enable/disable Peak 2 and Peak 3 for Level 2
+  document.getElementById('enablePeak2L2').addEventListener('change', (e) => {
+    document.getElementById('peak2L2-fields').style.display = e.target.checked ? 'block' : 'none';
+    updateKeepWidthsEqualState(2);
+    sendNewPeakConfig();
+  });
+  document.getElementById('enablePeak3L2').addEventListener('change', (e) => {
+    document.getElementById('peak3L2-fields').style.display = e.target.checked ? 'block' : 'none';
+    updateKeepWidthsEqualState(2);
+    sendNewPeakConfig();
+  });
+
+  // NEW: Fix peak position toggles for Peak 1 (main peaks)
+  document.getElementById('fixPeakPos1').addEventListener('change', (e) => {
+    sendPeakPos1Config();
+  });
+  document.getElementById('fixPeakPos2').addEventListener('change', (e) => {
+    sendPeakPos1Config();
+  });
+
+  // NEW: Fix peak position toggles for Level 1 peaks
+  document.getElementById('fixPeakPos2L1').addEventListener('change', (e) => {
+    sendNewPeakConfig();
+  });
+  document.getElementById('fixPeakPos3L1').addEventListener('change', (e) => {
+    sendNewPeakConfig();
+  });
+
+  // NEW: Fix peak position toggles for Level 2 peaks
+  document.getElementById('fixPeakPos2L2').addEventListener('change', (e) => {
+    sendNewPeakConfig();
+  });
+  document.getElementById('fixPeakPos3L2').addEventListener('change', (e) => {
+    sendNewPeakConfig();
+  });
+
+  // NEW: Peak position value changes for Peak 1 (main peaks - Level 1 and Level 2)
+  document.getElementById('peakPos1').addEventListener('change', () => sendPeakPos1Config());
+  document.getElementById('peakPos2').addEventListener('change', () => sendPeakPos1Config());
+
+  // NEW: Peak position value changes for Peak 2 and Peak 3
+  document.getElementById('peakPos2L1').addEventListener('change', () => sendNewPeakConfig());
+  document.getElementById('peakPos3L1').addEventListener('change', () => sendNewPeakConfig());
+  document.getElementById('peakPos2L2').addEventListener('change', () => sendNewPeakConfig());
+  document.getElementById('peakPos3L2').addEventListener('change', () => sendNewPeakConfig());
+
+  // NEW: Keep widths equal toggles
+  document.getElementById('keepWidthsEqual1').addEventListener('change', () => sendNewPeakConfig());
+  document.getElementById('keepWidthsEqual2').addEventListener('change', () => sendNewPeakConfig());
+
+  // NEW: Send Peak 1 position updates to backend
+  // Peak 1 is the main peak for each level (always active)
+  // Maps to settings file: fixPeakPos[0-1], peakPos[0-1]
+  function sendPeakPos1Config() {
+    const fixPeak1 = document.getElementById('fixPeakPos1').checked ? 1 : 0;
+    const peakPos1 = document.getElementById('peakPos1').value;
+    const fixPeak2 = document.getElementById('fixPeakPos2').checked ? 1 : 0;
+    const peakPos2 = document.getElementById('peakPos2').value;
+    
+    // Send PEAKPOS message for Level 1 Peak 1
+    if (conn_handle) {
+      conn_handle.send('PEAKPOS:0|' + fixPeak1 + '|' + peakPos1);
+      conn_handle.send('PEAKPOS:1|' + fixPeak2 + '|' + peakPos2);
+    }
+    markSettingsDirty();
+  }
+
+  // NEW: Send new peak configuration to backend
+  // Maps to settings file: doDoublet[0-1], doTriplet[0-1], fixDoubletPeakPos[0-1], doubletPeakPos[0-1], 
+  //                        fixTripletPeakPos[0-1], tripletPeakPos[0-1], fixDoubletWidth[0-1], fixTripletWidth[0-1]
+  function sendNewPeakConfig() {
+    const enablePeak2L1 = document.getElementById('enablePeak2L1').checked ? 1 : 0;
+    const enablePeak3L1 = document.getElementById('enablePeak3L1').checked ? 1 : 0;
+    const enablePeak2L2 = document.getElementById('enablePeak2L2').checked ? 1 : 0;
+    const enablePeak3L2 = document.getElementById('enablePeak3L2').checked ? 1 : 0;
+    
+    const fixPeak2L1 = document.getElementById('fixPeakPos2L1').checked ? 1 : 0;
+    const fixPeak3L1 = document.getElementById('fixPeakPos3L1').checked ? 1 : 0;
+    const fixPeak2L2 = document.getElementById('fixPeakPos2L2').checked ? 1 : 0;
+    const fixPeak3L2 = document.getElementById('fixPeakPos3L2').checked ? 1 : 0;
+    
+    const peakPos2L1 = document.getElementById('peakPos2L1').value;
+    const peakPos3L1 = document.getElementById('peakPos3L1').value;
+    const peakPos2L2 = document.getElementById('peakPos2L2').value;
+    const peakPos3L2 = document.getElementById('peakPos3L2').value;
+    
+    const keepWidths1 = document.getElementById('keepWidthsEqual1').checked ? 1 : 0;
+    const keepWidths2 = document.getElementById('keepWidthsEqual2').checked ? 1 : 0;
+    
+    const msg = [
+      enablePeak2L1, fixPeak2L1, peakPos2L1,
+      enablePeak3L1, fixPeak3L1, peakPos3L1,
+      keepWidths1,
+      enablePeak2L2, fixPeak2L2, peakPos2L2,
+      enablePeak3L2, fixPeak3L2, peakPos3L2,
+      keepWidths2
+    ].join('|');
+    
+    if (conn_handle) {
+      conn_handle.send('NEW_PEAK_CONFIG:' + msg);
+    }
+    markSettingsDirty();
+  }
+
+  // NEW: Update "Keep widths equal" checkbox state based on active peaks
+  function updateKeepWidthsEqualState(level) {
+    const enablePeak2 = document.getElementById('enablePeak2L' + level).checked;
+    const enablePeak3 = document.getElementById('enablePeak3L' + level).checked;
+    const hasMultiplePeaks = enablePeak2 || enablePeak3;
+    
+    const checkbox = document.getElementById('keepWidthsEqual' + level);
+    const label = document.getElementById('keepWidthsEqual' + level + '-label');
+    
+    checkbox.disabled = !hasMultiplePeaks;
+    label.style.color = hasMultiplePeaks ? '' : '#999';
+  }
+
+  // Doublet toggles - removed, now using NEW peak configuration UI
+  // Triplet toggles - removed, now using NEW peak configuration UI
+  // Width fix toggles - removed, now using NEW peak configuration UI
+  // Peak position toggles - removed, now using dedicated handlers
+
+  // Send level energies to server
+  function sendLevelEnergies() {
+    const val = id => document.getElementById(id).value;
+    const isDoublet1 = document.getElementById('enablePeak2L1').checked ? 1 : 0;
+    const isDoublet2 = document.getElementById('enablePeak2L2').checked ? 1 : 0;
+    const isTriplet1 = document.getElementById('enablePeak3L1').checked ? 1 : 0;
+    const isTriplet2 = document.getElementById('enablePeak3L2').checked ? 1 : 0;
+    const fixWidth1 = document.getElementById('keepWidthsEqual1').checked ? 1 : 0;
+    const fixWidth2 = document.getElementById('keepWidthsEqual2').checked ? 1 : 0;
+    const fixTripletWidth1 = fixWidth1;  // Same as doublet for now
+    const fixTripletWidth2 = fixWidth2;  // Same as doublet for now
+    const msg = [
+      val('lvl1-lo'), val('lvl1-hi'),
+      val('lvl2-lo'), val('lvl2-hi'),
+      isDoublet1, val('peakPos2L1'), val('peakPos2L1'),  // Using peak position instead of range
+      isDoublet2, val('peakPos2L2'), val('peakPos2L2'),  // Using peak position instead of range
+      fixWidth1, fixWidth2,
+      isTriplet1, val('peakPos3L1'), val('peakPos3L1'),  // Using peak position instead of range
+      isTriplet2, val('peakPos3L2'), val('peakPos3L2'),  // Using peak position instead of range
+      fixTripletWidth1, fixTripletWidth2,
+    ].join('|');
+    if (conn_handle) {
+      conn_handle.send('LEVELENERGIES:' + msg);
+      conn_handle.send('UPDATE_MARKERS');  // Trigger live marker update
+    }
+    markSettingsDirty();
+  }
+  
+  ['lvl1-lo', 'lvl1-hi', 'lvl2-lo', 'lvl2-hi'].forEach(id => {
+    document.getElementById(id).addEventListener('change', sendLevelEnergies);
+  });
+
+  // Excitation energy range
+  function sendExcitationUpdate() {
+    const lo = document.getElementById('exc-lo').value;
+    const hi = document.getElementById('exc-hi').value;
+    if (conn_handle) {
+      conn_handle.send('EXCITATION:' + lo + '|' + hi);
+      conn_handle.send('UPDATE_MARKERS');  // Trigger live marker update
+    }
+    markSettingsDirty();
+  }
+  document.getElementById('exc-lo').addEventListener('change', sendExcitationUpdate);
+  document.getElementById('exc-hi').addEventListener('change', sendExcitationUpdate);
+
+  // Background energy ranges
+  function sendBgEnergies() {
+    const v = id => document.getElementById(id).value;
+    const msg = [
+      v('bg1-lo1'), v('bg1-hi1'), v('bg1-lo2'), v('bg1-hi2'),
+      v('bg2-lo1'), v('bg2-hi1'), v('bg2-lo2'), v('bg2-hi2'),
+    ].join('|');
+    if (conn_handle) {
+      conn_handle.send('BGENERGIES:' + msg);
+      conn_handle.send('UPDATE_MARKERS');  // Trigger live marker update
+    }
+    markSettingsDirty();
+  }
+  ['bg1-lo1', 'bg1-hi1', 'bg1-lo2', 'bg1-hi2', 'bg2-lo1', 'bg2-hi1', 'bg2-lo2', 'bg2-hi2'].forEach(id => {
+    document.getElementById(id).addEventListener('change', sendBgEnergies);
+  });
+
+  // File menu items
+  document.getElementById('btn-open').addEventListener('click', () => {
+    openFileBrowser('open-matrix', 'Open matrix (.root file)');
+    closeAllMenus();
+  });
+  
+  document.getElementById('matrix-select').addEventListener('change', (e) => {
+    if (conn_handle) conn_handle.send('SELECTMATRIX:' + e.target.value);
+    markSettingsDirty();
+  });
+  
+  document.querySelectorAll('input[name="mode-radio"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      if (conn_handle) conn_handle.send('MODE:' + e.target.value);
+      markSettingsDirty();
+    });
+  });
+  
+  document.getElementById('btn-oslo').addEventListener('click', () => {
+    openFileBrowser('open-oslo', 'Load gSF literature (Oslo) data');
+    closeAllMenus();
+  });
+  
+  document.getElementById('btn-rho').addEventListener('click', () => {
+    openFileBrowser('open-rho', 'Load NLD literature (Oslo) data');
+    closeAllMenus();
+  });
+  
+  document.getElementById('btn-discrete').addEventListener('click', () => {
+    openFileBrowser('open-discrete', 'Load discrete levels data');
+    closeAllMenus();
+  });
+  
+  document.getElementById('btn-effi').addEventListener('click', () => {
+    openFileBrowser('open-effi', 'Load efficiency correction file');
+    closeAllMenus();
+  });
+  
+  document.getElementById('btn-load-settings').addEventListener('click', () => {
+    openFileBrowser('open-settings', 'Open settings file');
+    closeAllMenus();
+  });
+  
+  document.getElementById('btn-save-settings').addEventListener('click', () => {
+    if (currentSettingsPath) {
+      conn_handle.send('SAVE_SETTINGS:' + currentSettingsPath);
+      markSettingsClean();
+      updateSettingsDisplay();
+    } else {
+      openFileBrowser('save-settings', 'Save settings as...');
+    }
+    closeAllMenus();
+  });
+  
+  document.getElementById('btn-save-settings-as').addEventListener('click', () => {
+    openFileBrowser('save-settings', 'Save settings as...');
+    closeAllMenus();
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // EXIT DIALOG - Handle unsaved changes when closing
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  function showExitDialog() {
+    const overlay = document.getElementById('exit-dialog-overlay');
+    const saveCurrent = document.getElementById('exit-save-current');
+    saveCurrent.style.display = currentSettingsPath ? 'inline-block' : 'none';
+    overlay.style.display = 'flex';
+  }
+
+  function hideExitDialog() {
+    document.getElementById('exit-dialog-overlay').style.display = 'none';
+  }
+
+  function doExit() {
+    if (conn_handle) conn_handle.send('EXIT');
+    window.close();
+    setStatus('Exiting... (you can close this tab now)');
+  }
+
+  document.getElementById('btn-exit').addEventListener('click', () => {
+    closeAllMenus();
+    if (settingsDirty) {
+      showExitDialog();
+    } else {
+      doExit();
+    }
+  });
+
+  document.getElementById('exit-cancel').addEventListener('click', hideExitDialog);
+  
+  document.getElementById('exit-discard').addEventListener('click', () => {
+    hideExitDialog();
+    doExit();
+  });
+
+  document.getElementById('exit-save-current').addEventListener('click', () => {
+    if (currentSettingsPath && conn_handle) {
+      conn_handle.send('SAVE_SETTINGS:' + currentSettingsPath);
+      markSettingsClean();
+      updateSettingsDisplay();
+    }
+    hideExitDialog();
+    doExit();
+  });
+
+  document.getElementById('exit-save-as').addEventListener('click', () => {
+    hideExitDialog();
+    fbMode = 'save-settings-and-exit';
+    // Start in settings file directory if available, otherwise use start directory
+    if (currentSettingsPath) {
+      fbCurrentPath = currentSettingsPath.substring(0, currentSettingsPath.lastIndexOf('/')) || startDir;
+    } else {
+      fbCurrentPath = startDir;
+    }
+    document.getElementById('fb-title').textContent = 'Save settings before exit';
+    document.getElementById('fb-savebar').style.display = 'flex';
+    document.getElementById('fb-list').innerHTML = '<div style="padding: 8px; color: #888;">Loading...</div>';
+    document.getElementById('filebrowser-overlay').style.display = 'flex';
+    if (conn_handle) conn_handle.send('LISTDIR:' + fbCurrentPath);
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // VERSION UPGRADE DIALOG - Handle format version selection
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  function showVersionDialog(path) {
+    pendingSavePath = path;
+    document.getElementById('version-dialog-overlay').style.display = 'flex';
+  }
+
+  function hideVersionDialog() {
+    document.getElementById('version-dialog-overlay').style.display = 'none';
+    pendingSavePath = null;
+  }
+
+  document.getElementById('version-keep-old').addEventListener('click', () => {
+    if (pendingSavePath && conn_handle) {
+      conn_handle.send('SAVE_SETTINGS_VERSION1:' + pendingSavePath);
+      markSettingsClean();
+      updateSettingsDisplay();
+    }
+    hideVersionDialog();
+  });
+
+  document.getElementById('version-upgrade').addEventListener('click', () => {
+    if (pendingSavePath && conn_handle) {
+      conn_handle.send('SAVE_SETTINGS_VERSION2:' + pendingSavePath);
+      markSettingsClean();
+      updateSettingsDisplay();
+    }
+    hideVersionDialog();
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // SETTINGS FILE VIEWER - Display settings file content in modal
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  function showSettingsViewer(content, title = null) {
+    if (!title) {
+      const filename = currentSettingsPath ? currentSettingsPath.split('/').pop() : 'Settings File';
+      title = filename;
+    }
+    document.getElementById('settings-viewer-title').textContent = title;
+    document.getElementById('settings-viewer-content').textContent = content;
+    document.getElementById('settings-viewer-overlay').style.display = 'flex';
+  }
+
+  function hideSettingsViewer() {
+    document.getElementById('settings-viewer-overlay').style.display = 'none';
+  }
+
+  document.getElementById('settings-viewer-close').addEventListener('click', hideSettingsViewer);
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // UNIT CONVERSION WARNING - Show when MeV to keV conversion happens
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  function showUnitWarning(maxEnergy) {
+    document.getElementById('unit-warning-maxE').textContent = maxEnergy.toFixed(2);
+    document.getElementById('unit-warning-overlay').style.display = 'flex';
+  }
+
+  function hideUnitWarning() {
+    document.getElementById('unit-warning-overlay').style.display = 'none';
+  }
+
+  document.getElementById('unit-warning-ok').addEventListener('click', hideUnitWarning);
+  
+  // Allow clicking backdrop to close (optional)
+  document.getElementById('unit-warning-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'unit-warning-overlay') {
+      hideUnitWarning();
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // OPTIONS PANEL - Checkboxes for interpolation, oslo, sliding, background, width calib
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  function sendOptions() {
+    const v = id => document.getElementById(id).checked ? 1 : 0;
+    const msg = [
+      v('opt-interpol'), v('opt-oslo'), v('opt-sliding'), v('opt-background'), v('opt-width-calib'),
+    ].join('|');
+    if (conn_handle) conn_handle.send('OPTIONS:' + msg);
+    markSettingsDirty();
+  }
+  ['opt-interpol', 'opt-oslo', 'opt-sliding', 'opt-background', 'opt-width-calib'].forEach(id => {
+    document.getElementById(id).addEventListener('change', sendOptions);
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // DISPLAY OPTIONS - Control individual/average points and color coding
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  function sendDisplayOptions() {
+    const displaySingle = document.getElementById('opt-display-single').checked ? 1 : 0;
+    const displayAvg = document.getElementById('opt-display-avg').checked ? 1 : 0;
+    const colour = document.getElementById('opt-colour').checked ? 1 : 0;
+    const msg = displaySingle + '|' + displayAvg + '|' + colour;
+    if (conn_handle) conn_handle.send('DISPLAY_OPTIONS:' + msg);
+    markSettingsDirty();
+  }
+  ['opt-display-single', 'opt-display-avg', 'opt-colour'].forEach(id => {
+    document.getElementById(id).addEventListener('change', sendDisplayOptions);
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // EXCITATION & BINS PANEL - Bin size, bin count, and integration parameters
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  function sendBinSize() {
+    const lo = document.getElementById('binsize-lo').value;
+    const hi = document.getElementById('binsize-hi').value;
+    const isVar = document.getElementById('bin-variation').checked ? 1 : 0;
+    if (conn_handle) conn_handle.send('BINSIZE:' + lo + '|' + hi + '|' + isVar);
+    markSettingsDirty();
+  }
+  
+  document.getElementById('bin-variation').addEventListener('change', (e) => {
+    document.getElementById('binsize-hi').disabled = !e.target.checked;
+    document.getElementById('nbins-hi').disabled = !e.target.checked;
+    sendBinSize();
+  });
+  
+  document.getElementById('binsize-lo').addEventListener('change', sendBinSize);
+  document.getElementById('binsize-hi').addEventListener('change', sendBinSize);
+
+  document.getElementById('nbins-lo').addEventListener('change', (e) => {
+    if (conn_handle) conn_handle.send('NBINSLO:' + e.target.value);
+    markSettingsDirty();
+  });
+  
+  document.getElementById('nbins-hi').addEventListener('change', (e) => {
+    if (conn_handle) conn_handle.send('NBINSHI:' + e.target.value);
+    markSettingsDirty();
+  });
+
+  function sendIntParams() {
+    const minCounts = document.getElementById('min-counts').value;
+    const scaling = document.getElementById('gsf-scaling').value;
+    const autoScale = document.getElementById('auto-scale').checked ? 1 : 0;
+    const effCorr = document.getElementById('eff-corr').value;
+    if (conn_handle) conn_handle.send('INTPARAMS:' + minCounts + '|' + scaling + '|' + autoScale + '|' + effCorr);
+    markSettingsDirty();
+  }
+  ['min-counts', 'gsf-scaling', 'auto-scale', 'eff-corr'].forEach(id => {
+    document.getElementById(id).addEventListener('change', sendIntParams);
+  });
+
+  // Efficiency file checkbox handler
+  document.getElementById('use-effi-file').addEventListener('change', (e) => {
+    const useFile = e.target.checked ? 1 : 0;
+    if (conn_handle) conn_handle.send('DOEFFI:' + useFile);
+    updateEffiState();
+    markSettingsDirty();
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // WIDTH CALIBRATION PANEL - Edit fit parameters and update display live
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  // Refresh fits button - runs autofit and updates parameters
+  document.getElementById('btn-refresh-width-fits').addEventListener('click', () => {
+    if (conn_handle) {
+      conn_handle.send('REFRESH_WIDTH_CALIB_FITS');
+    }
+  });
+  
+  function sendWidthCalibParams() {
+    const l1_offset = document.getElementById('wc-l1-offset').value;
+    const l1_slope = document.getElementById('wc-l1-slope').value;
+    const l2_offset = document.getElementById('wc-l2-offset').value;
+    const l2_slope = document.getElementById('wc-l2-slope').value;
+    const msg = l1_offset + '|' + l1_slope + '|' + l2_offset + '|' + l2_slope;
+    if (conn_handle) {
+      conn_handle.send('UPDATE_WIDTH_CALIB_LINES:' + msg);
+    }
+    markSettingsDirty();
+  }
+  
+  ['wc-l1-offset', 'wc-l1-slope', 'wc-l2-offset', 'wc-l2-slope'].forEach(id => {
+    document.getElementById(id).addEventListener('change', sendWidthCalibParams);
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // SLOPE CORRECTION - Alpha transformation for gSF and NLD
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  function sendAlphaTransform() {
+    const alpha = document.getElementById('alpha-slope').value;
+    const litNorm = document.getElementById('lit-norm').value;
+    if (conn_handle) {
+      conn_handle.send('ALPHA_TRANSFORM:' + alpha + '|' + litNorm);
+    }
+    markSettingsDirty();
+  }
+  
+  document.getElementById('alpha-slope').addEventListener('change', sendAlphaTransform);
+  document.getElementById('lit-norm').addEventListener('change', sendAlphaTransform);
+
+  // Monte Carlo alpha search - with start/stop toggle
+  let mcRunning = false;
+  const mcButton = document.getElementById('btn-run-mc');
+  
+  mcButton.addEventListener('click', () => {
+    if (!conn_handle) return;
+    
+    if (mcRunning) {
+      // Stop the running simulation
+      conn_handle.send('STOP_MC');
+      setStatus('Stopping Monte Carlo simulation...');
+    } else {
+      // Start a new simulation
+      const nIter = document.getElementById('mc-iterations').value;
+      const exiMin = document.getElementById('mc-exi-min').value;
+      const exiMax = document.getElementById('mc-exi-max').value;
+      conn_handle.send('RUN_MC_ALPHA:' + nIter + '|' + exiMin + '|' + exiMax);
+      setStatus('Running Monte Carlo alpha search (' + nIter + ' iterations)...');
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // SHAPEIT BUTTON - Run analysis with current settings
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  document.querySelector('.btn-run').addEventListener('click', () => {
+      if (!conn_handle) return;
+      const val = id => document.getElementById(id).value;
+      const isDoublet1 = document.getElementById('enablePeak2L1').checked ? 1 : 0;
+      const isDoublet2 = document.getElementById('enablePeak2L2').checked ? 1 : 0;
+      const isTriplet1 = document.getElementById('enablePeak3L1').checked ? 1 : 0;
+      const isTriplet2 = document.getElementById('enablePeak3L2').checked ? 1 : 0;
+      const fixWidth1 = document.getElementById('keepWidthsEqual1').checked ? 1 : 0;
+      const fixWidth2 = document.getElementById('keepWidthsEqual2').checked ? 1 : 0;
+      const fixTripletWidth1 = fixWidth1;  // Same as doublet for now
+      const fixTripletWidth2 = fixWidth2;  // Same as doublet for now
+      const msg = [
+        val('lvl1-lo'), val('lvl1-hi'),
+        val('lvl2-lo'), val('lvl2-hi'),
+        val('exc-lo'), val('exc-hi'),
+        isDoublet1, val('peakPos2L1'), val('peakPos2L1'),  // Using peak position instead of range
+        isDoublet2, val('peakPos2L2'), val('peakPos2L2'),  // Using peak position instead of range
+        fixWidth1, fixWidth2,
+        isTriplet1, val('peakPos3L1'), val('peakPos3L1'),  // Using peak position instead of range
+        isTriplet2, val('peakPos3L2'), val('peakPos3L2'),  // Using peak position instead of range
+        fixTripletWidth1, fixTripletWidth2,
+      ].join('|');
+      conn_handle.send('RUN:' + msg);
+      setStatus('Running...');
+  });
+</script>
+</body>
+</html>
