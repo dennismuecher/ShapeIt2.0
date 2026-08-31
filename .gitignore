@@ -3,3 +3,4 @@
 *.pcm
 *.o
 *_ACLiC_*
+*.xcodeproj
