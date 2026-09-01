@@ -510,76 +510,63 @@ void DrawMarkers(bool usePadRange = false)
             gMarkerLine[i]->Draw();
     }
     
-    // Draw star markers for ALL active peak positions
-    // Star Y-position is at 110% of peak amplitude
-    // Star X-position uses the input field values directly
-    
-    // Peak 1 Level 1 (always active - always show)
-    // X-position: Use peakPos directly from settings file (sett->peakPos[0])
-    double peak1Pos = sett->peakPos[0];
-    double peak1Amp = getPeakAmplitude(peak1Pos);
-    gLevel1PeakMarker = new TMarker(peak1Pos, 1.1 * peak1Amp, 29);  // 29 = star, Y at 110% amplitude
-    gLevel1PeakMarker->SetMarkerColor(kRed);
-    gLevel1PeakMarker->SetMarkerSize(2.0);
-    if (peak1Pos >= xmin && peak1Pos <= xmax)
-        gLevel1PeakMarker->Draw();
-    
-    // Peak 1 Level 2 (always active - always show)
-    // X-position: Use peakPos directly from settings file (sett->peakPos[1])
-    double peak2Pos = sett->peakPos[1];
-    double peak2Amp = getPeakAmplitude(peak2Pos);
-    gLevel2PeakMarker = new TMarker(peak2Pos, 1.1 * peak2Amp, 29);  // Y at 110% amplitude
-    gLevel2PeakMarker->SetMarkerColor(kOrange);
-    gLevel2PeakMarker->SetMarkerSize(2.0);
-    if (peak2Pos >= xmin && peak2Pos <= xmax)
-        gLevel2PeakMarker->Draw();
-    
-    // Peak 2 Level 1 (doublet - show star if active)
-    // X-position: Use doubletPeakPos directly from settings file (sett->doubletPeakPos[0])
-    if (sett->doDoublet[0]) {
-        double doublet1Pos = sett->doubletPeakPos[0];
-        double doublet1Amp = getPeakAmplitude(doublet1Pos);
-        gDoublet1PeakMarker = new TMarker(doublet1Pos, 1.1 * doublet1Amp, 29);  // Y at 110% amplitude
-        gDoublet1PeakMarker->SetMarkerColor(kRed);
-        gDoublet1PeakMarker->SetMarkerSize(2.0);
-        if (doublet1Pos >= xmin && doublet1Pos <= xmax)
-            gDoublet1PeakMarker->Draw();
-    }
-    
-    // Peak 2 Level 2 (doublet - show star if active)
-    // X-position: Use doubletPeakPos directly from settings file (sett->doubletPeakPos[1])
-    if (sett->doDoublet[1]) {
-        double doublet2Pos = sett->doubletPeakPos[1];
-        double doublet2Amp = getPeakAmplitude(doublet2Pos);
-        gDoublet2PeakMarker = new TMarker(doublet2Pos, 1.1 * doublet2Amp, 29);  // Y at 110% amplitude
-        gDoublet2PeakMarker->SetMarkerColor(kOrange);
-        gDoublet2PeakMarker->SetMarkerSize(2.0);
-        if (doublet2Pos >= xmin && doublet2Pos <= xmax)
-            gDoublet2PeakMarker->Draw();
-    }
-    
-    // Peak 3 Level 1 (triplet - show star if active)
-    // X-position: Use tripletPeakPos directly from settings file (sett->tripletPeakPos[0])
-    if (sett->doTriplet[0]) {
-        double triplet1Pos = sett->tripletPeakPos[0];
-        double triplet1Amp = getPeakAmplitude(triplet1Pos);
-        gTriplet1PeakMarker = new TMarker(triplet1Pos, 1.1 * triplet1Amp, 29);  // Y at 110% amplitude
-        gTriplet1PeakMarker->SetMarkerColor(kRed);
-        gTriplet1PeakMarker->SetMarkerSize(2.0);
-        if (triplet1Pos >= xmin && triplet1Pos <= xmax)
-            gTriplet1PeakMarker->Draw();
-    }
-    
-    // Peak 3 Level 2 (triplet - show star if active)
-    // X-position: Use tripletPeakPos directly from settings file (sett->tripletPeakPos[1])
-    if (sett->doTriplet[1]) {
-        double triplet2Pos = sett->tripletPeakPos[1];
-        double triplet2Amp = getPeakAmplitude(triplet2Pos);
-        gTriplet2PeakMarker = new TMarker(triplet2Pos, 1.1 * triplet2Amp, 29);  // Y at 110% amplitude
-        gTriplet2PeakMarker->SetMarkerColor(kOrange);
-        gTriplet2PeakMarker->SetMarkerSize(2.0);
-        if (triplet2Pos >= xmin && triplet2Pos <= xmax)
-            gTriplet2PeakMarker->Draw();
+    // Draw star markers for peak positions only in Autofit mode
+    if (sett->mode == 2) {
+        double peak1Pos = sett->peakPos[0];
+        double peak1Amp = getPeakAmplitude(peak1Pos);
+        gLevel1PeakMarker = new TMarker(peak1Pos, 1.1 * peak1Amp, 29);
+        gLevel1PeakMarker->SetMarkerColor(kRed);
+        gLevel1PeakMarker->SetMarkerSize(2.0);
+        if (peak1Pos >= xmin && peak1Pos <= xmax)
+            gLevel1PeakMarker->Draw();
+
+        double peak2Pos = sett->peakPos[1];
+        double peak2Amp = getPeakAmplitude(peak2Pos);
+        gLevel2PeakMarker = new TMarker(peak2Pos, 1.1 * peak2Amp, 29);
+        gLevel2PeakMarker->SetMarkerColor(kOrange);
+        gLevel2PeakMarker->SetMarkerSize(2.0);
+        if (peak2Pos >= xmin && peak2Pos <= xmax)
+            gLevel2PeakMarker->Draw();
+
+        if (sett->doDoublet[0]) {
+            double doublet1Pos = sett->doubletPeakPos[0];
+            double doublet1Amp = getPeakAmplitude(doublet1Pos);
+            gDoublet1PeakMarker = new TMarker(doublet1Pos, 1.1 * doublet1Amp, 29);
+            gDoublet1PeakMarker->SetMarkerColor(kRed);
+            gDoublet1PeakMarker->SetMarkerSize(2.0);
+            if (doublet1Pos >= xmin && doublet1Pos <= xmax)
+                gDoublet1PeakMarker->Draw();
+        }
+
+        if (sett->doDoublet[1]) {
+            double doublet2Pos = sett->doubletPeakPos[1];
+            double doublet2Amp = getPeakAmplitude(doublet2Pos);
+            gDoublet2PeakMarker = new TMarker(doublet2Pos, 1.1 * doublet2Amp, 29);
+            gDoublet2PeakMarker->SetMarkerColor(kOrange);
+            gDoublet2PeakMarker->SetMarkerSize(2.0);
+            if (doublet2Pos >= xmin && doublet2Pos <= xmax)
+                gDoublet2PeakMarker->Draw();
+        }
+
+        if (sett->doTriplet[0]) {
+            double triplet1Pos = sett->tripletPeakPos[0];
+            double triplet1Amp = getPeakAmplitude(triplet1Pos);
+            gTriplet1PeakMarker = new TMarker(triplet1Pos, 1.1 * triplet1Amp, 29);
+            gTriplet1PeakMarker->SetMarkerColor(kRed);
+            gTriplet1PeakMarker->SetMarkerSize(2.0);
+            if (triplet1Pos >= xmin && triplet1Pos <= xmax)
+                gTriplet1PeakMarker->Draw();
+        }
+
+        if (sett->doTriplet[1]) {
+            double triplet2Pos = sett->tripletPeakPos[1];
+            double triplet2Amp = getPeakAmplitude(triplet2Pos);
+            gTriplet2PeakMarker = new TMarker(triplet2Pos, 1.1 * triplet2Amp, 29);
+            gTriplet2PeakMarker->SetMarkerColor(kOrange);
+            gTriplet2PeakMarker->SetMarkerSize(2.0);
+            if (triplet2Pos >= xmin && triplet2Pos <= xmax)
+                gTriplet2PeakMarker->Draw();
+        }
     }
 
     // Background boxes
@@ -987,16 +974,59 @@ void RunWidthCalibration(unsigned connid)
     window->Send(connid, msg);
 }
 
-// Clean up autofit display: remove intermediate cyan fits and add clean background lines
+// Clean up autofit display: remove intermediate cyan fits and add clean background lines.
+// In Integration mode (mode==1), draws the linear background estimated from the bg windows.
 void CleanupAutofitDisplay()
 {
-    if (sett->mode != 2 || !gCurrentHist)
+    if (!gCurrentHist)
         return;
-    
+
+    if (sett->mode == 1) {
+        // Integration mode: only draw background if background subtraction is enabled
+        if (!sett->doBackground)
+            return;
+        for (int level = 0; level < 2; level++) {
+            double xL0 = sett->bgEne[level][0], xL1 = sett->bgEne[level][1];
+            double xR0 = sett->bgEne[level][2], xR1 = sett->bgEne[level][3];
+            if (xL0 >= xL1 || xR0 >= xR1 || xL1 >= xR0)
+                continue;
+
+            // Average counts per bin in each background window
+            int binL0 = gCurrentHist->FindBin(xL0);
+            int binL1 = gCurrentHist->FindBin(xL1);
+            int binR0 = gCurrentHist->FindBin(xR0);
+            int binR1 = gCurrentHist->FindBin(xR1);
+            int nL = binL1 - binL0 + 1;
+            int nR = binR1 - binR0 + 1;
+            if (nL <= 0 || nR <= 0)
+                continue;
+
+            double yL = gCurrentHist->Integral(binL0, binL1) / nL;
+            double yR = gCurrentHist->Integral(binR0, binR1) / nR;
+            double xLeft  = (xL0 + xL1) / 2.0;
+            double xRight = (xR0 + xR1) / 2.0;
+
+            double slope     = (yR - yL) / (xRight - xLeft);
+            double intercept = yL - slope * xLeft;
+
+            std::string bgName = "bg_line_level" + std::to_string(level+1) + "_bin" + std::to_string(gCurrentBin);
+            delete gROOT->FindObject(bgName.c_str());
+            TF1 *bgLine = new TF1(bgName.c_str(), "[0]*x + [1]", xL0, xR1);
+            bgLine->SetParameter(0, slope);
+            bgLine->SetParameter(1, intercept);
+            bgLine->SetLineColor(kCyan-6);
+            bgLine->SetLineWidth(2);
+            bgLine->SetLineStyle(2);
+            bgLine->SetNpx(500);
+            bgLine->Draw("SAME");
+        }
+        return;
+    }
+
     TList *funcs = gCurrentHist->GetListOfFunctions();
     if (!funcs)
         return;
-    
+
     // Remove all cyan intermediate fits (color 426)
     std::vector<TF1*> toRemove;
     TIter next1(funcs);
@@ -1010,7 +1040,7 @@ void CleanupAutofitDisplay()
     for (TF1 *f : toRemove) {
         funcs->Remove(f);
     }
-    
+
     // Extract background parameters from final fits and draw background lines
     TIter next2(funcs);
     TObject *obj2;
@@ -1021,15 +1051,15 @@ void CleanupAutofitDisplay()
             int level = -1;
             if (fname.find("level1") != std::string::npos) level = 0;
             else if (fname.find("level2") != std::string::npos) level = 1;
-            
+
             if (level >= 0 && level <= 1) {
                 // Extract background parameters: par[1]*x + par[2]
                 double slope = f->GetParameter(1);
                 double intercept = f->GetParameter(2);
-                
+
                 // Create a simple linear function for just the background
                 std::string bgName = "bg_line_level" + std::to_string(level+1) + "_bin" + std::to_string(gCurrentBin);
-                TF1 *bgLine = new TF1(bgName.c_str(), "[0]*x + [1]", 
+                TF1 *bgLine = new TF1(bgName.c_str(), "[0]*x + [1]",
                                       sett->bgEne[level][0], sett->bgEne[level][3]);
                 bgLine->SetParameter(0, slope);
                 bgLine->SetParameter(1, intercept);
@@ -1175,26 +1205,25 @@ void CheckMarkersChanged()
         msg += std::to_string(sett->tripletPeakPos[0]) + "|" + std::to_string(sett->tripletPeakPos[1]);
         window->Send(0, msg);
         
-        // If in Autofit mode (mode 2), re-fit and redraw the current projection
-        // This updates the Gaussian fits on the histogram without recalculating all gSF
-        if (sett->mode == 2 && gDisplayMode == 5 && gCurrentBin > 0) {
+        // If viewing a bin projection, redraw with updated background/fit display
+        if (gDisplayMode == 5 && gCurrentBin > 0) {
             // Save current axis ranges before redrawing
             double xmin = gPad->GetUxmin();
             double xmax = gPad->GetUxmax();
             double ymin = gPad->GetUymin();
             double ymax = gPad->GetUymax();
             bool isLogy = gPad->GetLogy();
-            
+
             canvas->cd();
             gCurrentHist = matrix->GetDiagEx(gCurrentBin, BaseName(currentMatrixPath));
-            
+
             // Restore axis ranges
             gCurrentHist->GetXaxis()->SetRangeUser(xmin, xmax);
             if (isLogy)
                 gCurrentHist->GetYaxis()->SetRangeUser(TMath::Power(10, ymin), TMath::Power(10, ymax));
             else
                 gCurrentHist->GetYaxis()->SetRangeUser(ymin, ymax);
-            
+
             gCurrentHist->Draw();
             CleanupAutofitDisplay();
             DrawMarkers(true);
@@ -1251,6 +1280,10 @@ void HandleCanvasEvent(Int_t event, Int_t /*x*/, Int_t /*y*/, TObject * /*obj*/)
         if (gTriplet2PeakMarker)  sett->tripletPeakPos[1] = gTriplet2PeakMarker->GetX();
 
         DrawMarkers();
+        if (sett->mode == 1 && gDisplayMode == 5) {
+            CleanupAutofitDisplay();
+            PushCanvasUpdate();
+        }
 
         // Send only marker positions to UI, not full settings sync
         // This avoids overwriting checkbox states that may have changed in the UI
@@ -1978,6 +2011,28 @@ void ProcessData(unsigned connid, const std::string &arg)
     }
     else if (starts_with(arg, "MODE:")) {
         sett->mode = std::stoi(after_prefix(arg, "MODE:")); // 1 = Integration, 2 = Autofit
+        // Redraw the current projection with the appropriate fit display for the new mode
+        if (gCurrentHist && gDisplayMode == 5 && gCurrentBin > 0) {
+            double xmin = gPad->GetUxmin();
+            double xmax = gPad->GetUxmax();
+            double ymin = gPad->GetUymin();
+            double ymax = gPad->GetUymax();
+            bool isLogy = gPad->GetLogy();
+
+            canvas->cd();
+            gCurrentHist = matrix->GetDiagEx(gCurrentBin, BaseName(currentMatrixPath));
+
+            gCurrentHist->GetXaxis()->SetRangeUser(xmin, xmax);
+            if (isLogy)
+                gCurrentHist->GetYaxis()->SetRangeUser(TMath::Power(10, ymin), TMath::Power(10, ymax));
+            else
+                gCurrentHist->GetYaxis()->SetRangeUser(ymin, ymax);
+
+            gCurrentHist->Draw();
+            CleanupAutofitDisplay();
+            DrawMarkers(true);
+            PushCanvasUpdate();
+        }
     }
     else if (starts_with(arg, "BGENERGIES:")) {
         // order: bgEne[0][0..3] | bgEne[1][0..3]  (8 values)
@@ -1989,27 +2044,25 @@ void ProcessData(unsigned connid, const std::string &arg)
         for (int i = 0; i < 4; i++) sett->bgEne[0][i] = v[i];
         for (int i = 0; i < 4; i++) sett->bgEne[1][i] = v[4 + i];
         
-        // If in Autofit mode and viewing a bin projection, refit with new background regions
-        if (sett->mode == 2 && gDisplayMode == 5 && gCurrentBin > 0) {
-            std::cout << "Background energies changed in Autofit mode: re-fitting bin " << gCurrentBin << "..." << std::endl;
-            
+        // If viewing a bin projection, refit (Autofit) or redraw background (Integration)
+        if (gDisplayMode == 5 && gCurrentBin > 0) {
             // Save current axis ranges before redrawing
             double xmin = gPad->GetUxmin();
             double xmax = gPad->GetUxmax();
             double ymin = gPad->GetUymin();
             double ymax = gPad->GetUymax();
             bool isLogy = gPad->GetLogy();
-            
+
             canvas->cd();
             gCurrentHist = matrix->GetDiagEx(gCurrentBin, BaseName(currentMatrixPath));
-            
+
             // Restore axis ranges
             gCurrentHist->GetXaxis()->SetRangeUser(xmin, xmax);
             if (isLogy)
                 gCurrentHist->GetYaxis()->SetRangeUser(TMath::Power(10, ymin), TMath::Power(10, ymax));
             else
                 gCurrentHist->GetYaxis()->SetRangeUser(ymin, ymax);
-            
+
             gCurrentHist->Draw();
             CleanupAutofitDisplay();
             DrawMarkers(true);
