@@ -146,7 +146,7 @@ COMMUNICATION PROTOCOL:
           </div>
 
           <!-- Peak 1 (always active) -->
-          <div style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
+          <div id="peak1L1-section" style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
             <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 6px;">Peak 1</div>
             <div style="display: flex; flex-direction: column; gap: 4px;">
               <div style="display: flex; align-items: center; gap: 8px;">
@@ -162,7 +162,7 @@ COMMUNICATION PROTOCOL:
           </div>
 
           <!-- Peak 2 (toggleable) -->
-          <div style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
+          <div id="peak2L1-section" style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
               <input type="checkbox" id="enablePeak2L1" style="margin: 0;">
               <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 2</div>
@@ -183,7 +183,7 @@ COMMUNICATION PROTOCOL:
           </div>
 
           <!-- Peak 3 (toggleable) -->
-          <div style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
+          <div id="peak3L1-section" style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
               <input type="checkbox" id="enablePeak3L1" style="margin: 0;">
               <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 3</div>
@@ -220,7 +220,7 @@ COMMUNICATION PROTOCOL:
           </div>
 
           <!-- Peak 1 (always active) -->
-          <div style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
+          <div id="peak1L2-section" style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
             <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 6px;">Peak 1</div>
             <div style="display: flex; flex-direction: column; gap: 4px;">
               <div style="display: flex; align-items: center; gap: 8px;">
@@ -236,7 +236,7 @@ COMMUNICATION PROTOCOL:
           </div>
 
           <!-- Peak 2 (toggleable) -->
-          <div style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
+          <div id="peak2L2-section" style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
               <input type="checkbox" id="enablePeak2L2" style="margin: 0;">
               <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 2</div>
@@ -257,7 +257,7 @@ COMMUNICATION PROTOCOL:
           </div>
 
           <!-- Peak 3 (toggleable) -->
-          <div style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
+          <div id="peak3L2-section" style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
               <input type="checkbox" id="enablePeak3L2" style="margin: 0;">
               <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 3</div>
@@ -1820,9 +1820,28 @@ COMMUNICATION PROTOCOL:
     markSettingsDirty();
   });
   
+  function updatePeakSectionsForMode(mode) {
+    const peakIds = [
+      'peak1L1-section', 'peak2L1-section', 'peak3L1-section',
+      'peak1L2-section', 'peak2L2-section', 'peak3L2-section'
+    ];
+    const isIntegration = (mode == 1);
+    peakIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.opacity = isIntegration ? '0.4' : '';
+        el.style.pointerEvents = isIntegration ? 'none' : '';
+      }
+    });
+  }
+
+  // Apply on page load (Integration is default)
+  updatePeakSectionsForMode(1);
+
   document.querySelectorAll('input[name="mode-radio"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
       if (conn_handle) conn_handle.send('MODE:' + e.target.value);
+      updatePeakSectionsForMode(parseInt(e.target.value));
       markSettingsDirty();
     });
   });
