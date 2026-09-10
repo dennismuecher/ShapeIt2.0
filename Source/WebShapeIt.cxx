@@ -20,6 +20,7 @@
 #include "TWebCanvas.h"
 #include "TEnv.h"
 #include "TSystem.h"
+#include "TError.h"
 #include "TLine.h"
 #include "TBox.h"
 #include "TH1.h"
@@ -104,27 +105,19 @@ TH1   *gCurrentHist   = nullptr; // whatever's currently drawn in modes 4/5, use
 // splits "685|900|1497|1732|3500|6700" style messages on '|'
 std::vector<double> ParsePipeDoubles(const std::string &s)
 {
-    std::cout << "[ParsePipeDoubles] Input: '" << s << "'" << std::endl;
-    std::cout.flush();
     
     std::vector<double> out;
     std::stringstream ss(s);
     std::string tok;
     int idx = 0;
     while (std::getline(ss, tok, '|')) {
-        std::cout << "[ParsePipeDoubles] Token " << idx << ": '" << tok << "'" << std::endl;
-        std::cout.flush();
         
         double val = std::stod(tok);
         out.push_back(val);
         
-        std::cout << "[ParsePipeDoubles] Converted to: " << val << std::endl;
-        std::cout.flush();
         idx++;
     }
     
-    std::cout << "[ParsePipeDoubles] Total parsed: " << out.size() << " values" << std::endl;
-    std::cout.flush();
     
     return out;
 }
@@ -257,24 +250,6 @@ std::string ResolveRelativeTo(const std::string &baseDir, const std::string &may
 
 void DumpSettings()
 {
-    std::cout << "--- sett dump after loading settings file ---\n"
-              << "  mode: " << sett->mode << " (1=Integration, 2=Autofit)\n"
-              << "  dataFileName: " << sett->dataFileName << "\n"
-              << "  osloFileName: " << sett->osloFileName << "\n"
-              << "  matrixName: " << sett->matrixName << "\n"
-              << "  levEne: " << sett->levEne[0] << " " << sett->levEne[1] << " "
-                               << sett->levEne[2] << " " << sett->levEne[3] << "\n"
-              << "  peakPos: " << sett->peakPos[0] << " " << sett->peakPos[1] << "\n"
-              << "  doubletPeakPos: " << sett->doubletPeakPos[0] << " " << sett->doubletPeakPos[1] << "\n"
-              << "  tripletPeakPos: " << sett->tripletPeakPos[0] << " " << sett->tripletPeakPos[1] << "\n"
-              << "  exiEne: " << sett->exiEne[0] << " " << sett->exiEne[1] << "\n"
-              << "  exi_size: " << sett->exi_size[0] << " " << sett->exi_size[1] << "\n"
-              << "  doOslo: " << sett->doOslo << "  doAutoScale: " << sett->doAutoScale
-                               << "  doInterpol: " << sett->doInterpol << "\n"
-              << "  doSlidingWindow: " << sett->doSlidingWindow
-                               << "  doBinVariation: " << sett->doBinVariation
-                               << "  doBackground: " << sett->doBackground << "\n"
-              << "----------------------------------------------\n";
 }
 
 // Recomputes nOfBins (low) from whatever exiEne/exi_size[0] currently are, and
@@ -597,7 +572,15 @@ void DrawMarkers(bool usePadRange = false)
 // members -- used to detect zoom/pan so markers can be redrawn to match.
 double gLastUxmin = 0, gLastUxmax = 0, gLastUymin = 0, gLastUymax = 0;
 bool gHaveLastRange = false;
-int gSkipRangeChecks = 0;  // Skip this many polling cycles (for context menu operations)
+
+// State for handling context-menu range operations (like axis "UnZoom").
+// Rather than blindly skipping a fixed number of poll cycles (which could push
+// a stale range back to the browser and revert the operation mid-flight), we
+// wait until the range has actually stopped changing before redrawing markers.
+bool gAwaitContextOp = false;   // true while a context-menu op may be in flight
+bool gSawContextChange = false; // saw at least one range change since right-click
+int gStableCycles = 0;          // consecutive poll cycles with no range change
+int gContextOpTimeout = 0;      // hard cap on cycles to wait before giving up
 
 // Track last marker positions to detect when they're dragged
 double gLastLevEne[4] = {0, 0, 0, 0};
@@ -637,7 +620,6 @@ void MCTimerCallback()
         if (gMCState) {
             // Check if we have any results at all
             if (gMCState->alphas.empty()) {
-                std::cout << "Monte Carlo stopped with no results." << std::endl;
                 window->Send(gMCState->connid, "MC_STOPPED:No iterations completed before stop.");
                 
                 // Restore settings
@@ -652,7 +634,6 @@ void MCTimerCallback()
             }
             
             std::string stopReason = gMCState->stopRequested ? "stopped by user" : "completed all iterations";
-            std::cout << "Monte Carlo " << stopReason << " after " << gMCState->currentIter << " iterations, creating final display..." << std::endl;
             
             // Final display with best fit marker
             canvas->cd();
@@ -665,8 +646,6 @@ void MCTimerCallback()
             double bestChi2 = *minIt;
             double bestExLow = gMCState->exis[minIdx];
             
-            std::cout << "Best fit: alpha=" << bestAlpha << ", chi2=" << bestChi2 
-                      << ", Ex_low=" << bestExLow << std::endl;
             
             // Top left: chi2 vs delta alpha with best point marked
             canvas->cd(1);
@@ -744,14 +723,8 @@ void MCTimerCallback()
             window->Send(gMCState->connid, msg);
             
             if (gMCState->stopRequested) {
-                std::cout << "Monte Carlo stopped by user after " << gMCState->currentIter << " of " 
-                          << gMCState->totalIters << " iterations. Best alpha: " << bestAlpha 
-                          << " (chi2: " << bestChi2 << ", Ex_low: " << bestExLow << " keV)" << std::endl;
             } else {
-                std::cout << "Monte Carlo complete. Best alpha: " << bestAlpha 
-                          << " (chi2: " << bestChi2 << ", Ex_low: " << bestExLow << " keV)" << std::endl;
             }
-            std::cout << "MC mode disabled (doMC = false)" << std::endl;
             
             delete gMCState->graph;
             delete gMCState;
@@ -772,7 +745,6 @@ void MCTimerCallback()
     ShapeCollector *tempColl = ShapeController::RunAnalysis(sett, matrix);
     
     if (!tempColl) {
-        std::cout << "  WARNING: iteration " << (gMCState->currentIter+1) << " returned null" << std::endl;
         sett->verbose = savedVerbose;
         gMCState->currentIter++;
         return;
@@ -790,8 +762,6 @@ void MCTimerCallback()
     gMCState->chi2s.push_back(chi2);
     gMCState->exis.push_back(exiLow);
     
-    std::cout << "Iteration " << (gMCState->currentIter+1) << "/" << gMCState->totalIters 
-              << ": Ex_low=" << exiLow << ", alpha=" << alpha << ", chi2=" << chi2 << std::endl;
     
     // Apply alpha transformation to get properly scaled gSF data
     tempColl->Transform(sett->lit_norm, alpha);
@@ -859,23 +829,15 @@ void MCTimerCallback()
 // live progress in main canvas. Uses timer-based batching for live updates.
 void RunMonteCarlo(unsigned connid, int nIterations, double exiLowMin, double exiLowMax)
 {
-    std::cout << "\n=== RunMonteCarlo ENTERED ===" << std::endl;
-    std::cout << "Parameters: nIterations=" << nIterations 
-              << ", exiLowMin=" << exiLowMin << ", exiLowMax=" << exiLowMax << std::endl;
     
     if (!matrix || !sett->doOslo) {
-        std::cout << "ERROR: Prerequisites not met!" << std::endl;
-        std::cout << "  matrix = " << (matrix ? "loaded" : "NULL") << std::endl;
-        std::cout << "  doOslo = " << sett->doOslo << std::endl;
         window->Send(connid, "ERROR: Monte Carlo requires matrix and Oslo literature data loaded.");
         return;
     }
     
     // Enable MC mode for Gaussian randomization of literature and experimental data
     sett->doMC = true;
-    std::cout << "MC mode enabled (doMC = true) - data will be randomized" << std::endl;
     
-    std::cout << "Prerequisites OK, starting MC run..." << std::endl;
     
     // Clear canvas and set up progress display
     canvas->cd();
@@ -915,7 +877,6 @@ void RunMonteCarlo(unsigned connid, int nIterations, double exiLowMin, double ex
     mcTimer->Connect("Timeout()", 0, 0, "MCTimerCallback()");
     mcTimer->Start(100, kFALSE); // Every 100ms, run 1 iteration
     
-    std::cout << "MC timer started - will run " << nIterations << " iterations with live display" << std::endl;
 }
 
 // Runs a temporary single-iteration autofit analysis purely to generate width
@@ -925,7 +886,6 @@ void RunMonteCarlo(unsigned connid, int nIterations, double exiLowMin, double ex
 // size, no sliding window) to get the maximum number of data points.
 void RunWidthCalibration(unsigned connid)
 {
-    std::cout << "=== Running width calibration analysis ===" << std::endl;
     
     if (!matrix) {
         window->Send(connid, "No matrix loaded yet.");
@@ -939,17 +899,12 @@ void RunWidthCalibration(unsigned connid)
     bool savedBinVariation = sett->doBinVariation;
     double savedExiSize1 = sett->exi_size[1];  // Save high bin size too
     
-    std::cout << "Saving user settings - Mode: " << savedMode 
-              << ", SlidingWindow: " << savedSlidingWindow 
-              << ", BinVariation: " << savedBinVariation << std::endl;
     
     // Force settings optimal for width calibration
     sett->mode = 2;  // Autofit mode required for width data
     sett->doSlidingWindow = false;  // No sliding window - want single peaks
     sett->doBinVariation = false;   // Single bin size only - maximum data points
     
-    std::cout << "Running single-iteration autofit for width calibration..." << std::endl;
-    std::cout << "  (Temporarily using: Autofit mode, no sliding window, no bin variation)" << std::endl;
     
     // Run a temporary analysis just to populate the width data in the matrix
     // We discard the ShapeCollector results - only the width fits matter
@@ -962,10 +917,6 @@ void RunWidthCalibration(unsigned connid)
     sett->doBinVariation = savedBinVariation;
     sett->exi_size[1] = savedExiSize1;  // Restore high bin size
     
-    std::cout << "Width calibration complete. User settings restored." << std::endl;
-    std::cout << "  Restored - Mode: " << sett->mode 
-              << ", SlidingWindow: " << sett->doSlidingWindow 
-              << ", BinVariation: " << sett->doBinVariation << std::endl;
     
     // Send the fitted parameters to the UI to populate the fields
     std::string msg = "WIDTH_CALIB_PARAMS:";
@@ -1084,17 +1035,40 @@ void CheckRangeChanged()
     if (!matrix || (gDisplayMode != 4 && gDisplayMode != 5) || !gPad)
         return;
 
-    // If we're skipping checks (context menu operation in progress), decrement and return
-    if (gSkipRangeChecks > 0) {
-        gSkipRangeChecks--;
-        return;
-    }
-
     double uxmin = gPad->GetUxmin(), uxmax = gPad->GetUxmax();
     double uymin = gPad->GetUymin(), uymax = gPad->GetUymax();
 
-    if (!gHaveLastRange || gLastUxmin != uxmin || gLastUxmax != uxmax
-                        || gLastUymin != uymin || gLastUymax != uymax) {
+    bool rangeDiffers = !gHaveLastRange
+                        || gLastUxmin != uxmin || gLastUxmax != uxmax
+                        || gLastUymin != uymin || gLastUymax != uymax;
+
+    // While a context-menu operation (e.g. axis UnZoom) may be in flight, track
+    // the latest range but hold off redrawing until it has settled. Pushing a
+    // canvas update mid-operation can revert the browser's zoom state, which is
+    // why an unzoom would sometimes appear to do nothing until repeated.
+    if (gAwaitContextOp) {
+        if (rangeDiffers) {
+            gLastUxmin = uxmin; gLastUxmax = uxmax;
+            gLastUymin = uymin; gLastUymax = uymax;
+            gHaveLastRange = true;
+            gSawContextChange = true;
+            gStableCycles = 0;
+        } else {
+            gStableCycles++;
+        }
+
+        // Redraw once the range has been stable for a couple of cycles (the
+        // operation has finished round-tripping), or bail out after a hard
+        // timeout so we never wait indefinitely if nothing changed.
+        if ((gSawContextChange && gStableCycles >= 2) || --gContextOpTimeout <= 0) {
+            gAwaitContextOp = false;
+            if (gSawContextChange)
+                DrawMarkers(true);
+        }
+        return;
+    }
+
+    if (rangeDiffers) {
         gLastUxmin = uxmin; gLastUxmax = uxmax;
         gLastUymin = uymin; gLastUymax = uymax;
         gHaveLastRange = true;
@@ -1253,11 +1227,14 @@ void HandleCanvasEvent(Int_t event, Int_t /*x*/, Int_t /*y*/, TObject * /*obj*/)
     if (!matrix || (gDisplayMode != 4 && gDisplayMode != 5))
         return;
 
-    // On right-click (context menu), pause polling for 3 cycles (~1.5 seconds)
-    // This gives ROOT's context menu operations (like unzoom) time to complete
-    // without our marker redrawing interfering
+    // On right-click, arm context-menu handling: the poll will hold off
+    // redrawing markers until any resulting range change (e.g. UnZoom) has
+    // settled, rather than pushing a stale update that could revert it.
     if (event == kButton3Down) {
-        gSkipRangeChecks = 3;  // Skip next 3 polling cycles
+        gAwaitContextOp = true;
+        gSawContextChange = false;
+        gStableCycles = 0;
+        gContextOpTimeout = 12;  // ~6 s hard cap at the 500 ms poll interval
         return;
     }
 
@@ -1302,23 +1279,44 @@ void HandleCanvasEvent(Int_t event, Int_t /*x*/, Int_t /*y*/, TObject * /*obj*/)
     }
 }
 
+// Tells the UI whether a usable width calibration exists (non-zero widthCal
+// parameters). The "Use width calibration" checkbox stays greyed out until this
+// is true, so it can't be enabled without an actual calibration having been
+// performed -- otherwise the widths would just be zero.
+static void SendWidthCalibDone(unsigned connid)
+{
+    bool done = (sett->widthCal[0][0] != 0.0 || sett->widthCal[0][1] != 0.0 ||
+                 sett->widthCal[1][0] != 0.0 || sett->widthCal[1][1] != 0.0);
+    window->Send(connid, std::string("WIDTH_CALIB_DONE:") + (done ? "1" : "0"));
+}
+
 void RunShapeIt(unsigned connid)
 {
-    std::cout << "=== RunShapeIt called, display mode = " << gDisplayMode << " ===" << std::endl;
     
     if (!matrix) {
         window->Send(connid, "No matrix loaded yet -- open one first.");
         return;
     }
 
-    std::cout << "About to run with these settings:\n";
+    // "Display expectation" (doOslo) plots the gSF literature/Oslo data alongside
+    // the result. If it's enabled but no valid literature file has been loaded, the
+    // analysis produces an empty literature graph that collapses the plot axes to
+    // 0..1 and leaves nothing visible. Bail out with a clear, actionable message
+    // instead, leaving the current view untouched (mirrors the Monte Carlo
+    // prerequisite check).
+    if (sett->doOslo && (sett->osloFileName.empty() ||
+                         gSystem->AccessPathName(sett->osloFileName.c_str()))) {
+        window->Send(connid,
+            "ERROR: 'Display expectation' is enabled but no gSF literature data file "
+            "has been loaded. Load one via Settings -> Load gSF literature (Oslo) data..., "
+            "or turn off 'Display expectation' in Options.");
+        return;
+    }
+
     DumpSettings();
 
-    std::cout << "Deleting old gSFColl..." << std::endl;
     delete gSFColl;
-    std::cout << "Running analysis..." << std::endl;
     gSFColl = ShapeController::RunAnalysis(sett, matrix);
-    std::cout << "Analysis complete." << std::endl;
 
     // Testing whether the crash is about the DATA, about error bars specifically
     // (my earlier bare-TGraph test had none -- a real gap in that test), or
@@ -1360,8 +1358,6 @@ void RunShapeIt(unsigned connid)
         while ((obj = next())) {
             TGraph *g = dynamic_cast<TGraph *>(obj);
             if (!g) { graphIdx++; continue; }
-            std::cout << "Graph #" << graphIdx << " (" << g->GetName() << ", "
-                      << obj->ClassName() << "), " << g->GetN() << " points:\n";
 
             // Classify by comparing pointer to the known literature graph
             // This is reliable because it checks if this graph IS the literature data
@@ -1375,8 +1371,6 @@ void RunShapeIt(unsigned connid)
                     x.push_back(ge->GetX()[i]); y.push_back(ge->GetY()[i]);
                     exl.push_back(ge->GetEXlow()[i]); exh.push_back(ge->GetEXhigh()[i]);
                     eyl.push_back(ge->GetEYlow()[i]); eyh.push_back(ge->GetEYhigh()[i]);
-                    std::cout << "  [" << i << "] x=" << x.back() << " y=" << y.back()
-                              << " eyl=" << eyl.back() << " eyh=" << eyh.back() << "\n";
                     allX.push_back(x.back()); allY.push_back(y.back());
                 }
                 auto *fresh = new TGraphAsymmErrors((int)x.size(), x.data(), y.data(),
@@ -1389,8 +1383,6 @@ void RunShapeIt(unsigned connid)
                 for (int i = 0; i < ge2->GetN(); i++) {
                     x.push_back(ge2->GetX()[i]); y.push_back(ge2->GetY()[i]);
                     ex.push_back(ge2->GetEX()[i]); ey.push_back(ge2->GetEY()[i]);
-                    std::cout << "  [" << i << "] x=" << x.back() << " y=" << y.back()
-                              << " ex=" << ex.back() << " ey=" << ey.back() << "\n";
                     allX.push_back(x.back()); allY.push_back(y.back());
                 }
                 auto *fresh = new TGraphErrors((int)x.size(), x.data(), y.data(), ex.data(), ey.data());
@@ -1399,50 +1391,37 @@ void RunShapeIt(unsigned connid)
             }
             else {
                 for (int i = 0; i < g->GetN(); i++) {
-                    std::cout << "  [" << i << "] x=" << g->GetX()[i] << " y=" << g->GetY()[i] << "\n";
                     allX.push_back(g->GetX()[i]); allY.push_back(g->GetY()[i]);
                 }
             }
             graphIdx++;
         }
     }
-    std::cout << "Total points collected: " << allX.size()
-              << ", fresh error-bar graphs built: " << freshGraphs.size() << std::endl;
 
-    std::cout << "About to clear canvas and draw results..." << std::endl;
-    std::cout << "Current display mode before clear: " << gDisplayMode << std::endl;
     
     // If coming from width calibration view (mode 7), the TMultiGraph owns the TGraphs
     // we created, and canvas->Clear() will try to delete them. To avoid any potential
     // ownership/deletion issues, manually delete the primitives BEFORE calling Clear().
     if (gDisplayMode == 7) {
-        std::cout << "Coming from width calibration view, doing explicit cleanup..." << std::endl;
         canvas->cd();
         TList *prims = canvas->GetListOfPrimitives();
         if (prims) {
-            std::cout << "Canvas has " << prims->GetSize() << " primitives before clear" << std::endl;
             // Remove and delete all primitives manually to ensure clean deletion order
             while (prims->GetSize() > 0) {
                 TObject *obj = prims->First();
-                std::cout << "  Removing: " << obj->ClassName() << " (" << obj->GetName() << ")" << std::endl;
                 prims->Remove(obj);
                 delete obj;  // Explicitly delete - this will also delete owned graphs if it's a TMultiGraph
             }
-            std::cout << "All primitives manually deleted." << std::endl;
         }
         // Now Clear() should have nothing to do
-        std::cout << "Calling canvas->Clear() on empty canvas..." << std::endl;
         canvas->Clear();
     } else {
         // Normal case - just clear as usual
         canvas->cd();
-        std::cout << "Calling canvas->Clear()..." << std::endl;
         canvas->Clear();
     }
     
-    std::cout << "Canvas cleared, nulling marker pointers..." << std::endl;
     for (int i = 0; i < 4; i++) { gMarkerLine[i] = nullptr; gDoubletLine[i] = nullptr; gBgBox[i] = nullptr; }
-    std::cout << "Marker pointers nulled." << std::endl;
 
     bool firstDrawn = false;
     TGraph *firstGraph = nullptr;  // Track the first graph drawn with "A" option
@@ -1452,7 +1431,6 @@ void RunShapeIt(unsigned connid)
     int color1 = 6;  // kMagenta
     int color2 = sett->colour ? 7 : 6;  // kCyan if colour enabled, otherwise same as Level 1
     
-    std::cout << "Drawing " << freshGraphs.size() << " graphs..." << std::endl;
     for (auto &fg : freshGraphs) {
         TGraph *g = fg.graph;
 
@@ -1489,7 +1467,6 @@ void RunShapeIt(unsigned connid)
         
         firstDrawn = true;
     }
-    std::cout << "Graphs drawn." << std::endl;
     
     // After all graphs are drawn, set the axis labels and plot title.
     // When a graph is drawn with the "A" option, it owns the histogram that
@@ -1497,7 +1474,6 @@ void RunShapeIt(unsigned connid)
     if (firstGraph) {
         TH1F *hist = firstGraph->GetHistogram();
         if (hist) {
-            std::cout << "Found graph histogram, setting title and axis labels..." << std::endl;
             // Set title with semicolons to separate title;xlabel;ylabel (ROOT convention)
             hist->SetTitle("Gamma Ray Strength Function from Shape Method;E_{#gamma} (keV);f(E_{#gamma}) (MeV^{-3})");
             // Also set axis labels explicitly
@@ -1512,7 +1488,6 @@ void RunShapeIt(unsigned connid)
             firstGraph->SetTitle("Gamma Ray Strength Function from Shape Method");
             gPad->Modified();  // Mark pad as modified after changing labels
         } else {
-            std::cout << "Warning: graph histogram not found, cannot set axis labels" << std::endl;
         }
     }
     
@@ -1540,7 +1515,6 @@ void RunShapeIt(unsigned connid)
         // Set axis labels and title for the fallback graph too
         TH1F *hist = simpleGraph->GetHistogram();
         if (hist) {
-            std::cout << "Found graph histogram (fallback), setting title and axis labels..." << std::endl;
             hist->SetTitle("Gamma Ray Strength Function from Shape Method;E_{#gamma} (keV);f(E_{#gamma}) (MeV^{-3})");
             hist->GetXaxis()->SetTitle("E_{#gamma} (keV)");
             hist->GetYaxis()->SetTitle("f(E_{#gamma}) (MeV^{-3})");
@@ -1550,7 +1524,6 @@ void RunShapeIt(unsigned connid)
             hist->GetYaxis()->SetTitleOffset(1.2);
             gPad->Modified();
         } else {
-            std::cout << "Warning: graph histogram not found (fallback)" << std::endl;
         }
     }
 
@@ -1562,18 +1535,13 @@ void RunShapeIt(unsigned connid)
     // that plausibly corrupts the same primitive list CreatePadSnapshot walks
     // moments later -- which lines up exactly with where this crash happens.
     // This is display mode 0: "results view, no markers apply".
-    std::cout << "Setting display mode to 0 (results view)..." << std::endl;
     gDisplayMode = 0;
     gHaveLastRange = false;
 
-    std::cout << "Calling PushCanvasUpdate()..." << std::endl;
     PushCanvasUpdate();
-    std::cout << "Canvas update pushed." << std::endl;
 
-    std::cout << "Sending completion messages..." << std::endl;
     window->Send(connid, "Done.");
     SendNBins(connid);
-    std::cout << "=== RunShapeIt complete ===" << std::endl;
 }
 
 // Lists a directory's contents and sends it back as a simple newline-delimited
@@ -1624,19 +1592,31 @@ void SendDirListing(unsigned connid, std::string path)
     window->Send(connid, msg);
 }
 
+// Redirects everything the backend prints to std::cout into the browser's message
+// box for the duration of one browser message, instead of the terminal. ROOT's own
+// errors/warnings (std::cerr and the Error()/Warning() system) are not touched, so
+// they still appear in the terminal.
+struct CoutToMessageBox {
+    unsigned connid;
+    std::ostringstream capture;
+    std::streambuf* old;
+    explicit CoutToMessageBox(unsigned c) : connid(c), old(std::cout.rdbuf(capture.rdbuf())) {}
+    ~CoutToMessageBox() {
+        std::cout.rdbuf(old);
+        std::istringstream iss(capture.str());
+        std::string line;
+        while (std::getline(iss, line))
+            if (!line.empty())
+                window->Send(connid, line);
+    }
+};
+
 void ProcessData(unsigned connid, const std::string &arg)
 {
-    // TEMPORARILY DISABLED: stdout buffering to help debug Monte Carlo issue
-    // Just print directly to terminal like a normal C++ program
-    
-    // Suppress noisy debug messages for channel setup and width calibration updates
-    // (Also suppress common messages like SHOWPROJ, EXIT to reduce console noise)
-    if (!starts_with(arg, "channel:") && 
-        !starts_with(arg, "UPDATE_WIDTH_CALIB_LINES:") &&
-        !starts_with(arg, "SHOWPROJ") &&
-        !starts_with(arg, "EXIT")) {
-        std::cout << "Got message from browser: " << arg << std::endl;
-    }
+    // Capture anything the backend analysis prints to std::cout and forward it to
+    // the message box rather than the terminal (ROOT errors use std::cerr and are
+    // left alone). The guard restores std::cout and flushes on every return path.
+    CoutToMessageBox coutCapture(connid);
 
     if (starts_with(arg, "channel:")) {
         int chid = std::stoi(after_prefix(arg, "channel:"));
@@ -1665,6 +1645,7 @@ void ProcessData(unsigned connid, const std::string &arg)
                 SendNBins(connid);
                 // Enable width calibration since matrix is loaded
                 window->Send(connid, "WIDTH_CALIB_AVAILABLE:1");
+                SendWidthCalibDone(connid);
                 // Send efficiency correction status
                 std::string effiMsg = "EFFI_INFO:" + std::string(sett->doEffi ? "1" : "0") + "|" + sett->effiFileName;
                 window->Send(connid, effiMsg);
@@ -1709,7 +1690,6 @@ void ProcessData(unsigned connid, const std::string &arg)
         if (!testFile || testFile->IsZombie()) {
             if (testFile) delete testFile;
             window->Send(connid, "ERROR: Not a valid ROOT file or file is corrupted: " + path);
-            std::cout << "User attempted to open non-ROOT file as matrix: " << path << std::endl;
             return;
         }
         testFile->Close();
@@ -1737,6 +1717,7 @@ void ProcessData(unsigned connid, const std::string &arg)
         SendSettingsSync(connid);
         // Enable width calibration now that we have a matrix loaded
         window->Send(connid, "WIDTH_CALIB_AVAILABLE:1");
+        SendWidthCalibDone(connid);
         window->Send(connid, "Matrix opened: " + path);
     }
     else if (starts_with(arg, "SELECTMATRIX:")) {
@@ -1767,6 +1748,7 @@ void ProcessData(unsigned connid, const std::string &arg)
 
         sett->osloFileName = path;
         sett->doOslo = true;
+        window->Send(connid, "OSLO_AVAILABLE:1");
         window->Send(connid, "gSF literature file set: " + path);
     }
     else if (starts_with(arg, "RHO:")) {
@@ -1903,6 +1885,7 @@ void ProcessData(unsigned connid, const std::string &arg)
                 SendNBins(connid);
                 // Enable width calibration since we have a matrix loaded
                 window->Send(connid, "WIDTH_CALIB_AVAILABLE:1");
+                SendWidthCalibDone(connid);
                 // Send efficiency correction status
                 std::string effiMsg = "EFFI_INFO:" + std::string(sett->doEffi ? "1" : "0") + "|" + sett->effiFileName;
                 window->Send(connid, effiMsg);
@@ -1912,6 +1895,11 @@ void ProcessData(unsigned connid, const std::string &arg)
         }
 
         SendSettingsSync(connid);
+        // Enable "Display expectation" only if the loaded settings reference a
+        // valid gSF literature file; otherwise keep it greyed out.
+        bool osloOk = !sett->osloFileName.empty() &&
+                      !gSystem->AccessPathName(sett->osloFileName.c_str());
+        window->Send(connid, std::string("OSLO_AVAILABLE:") + (osloOk ? "1" : "0"));
         window->Send(connid, "Settings loaded: " + path);
     }
     else if (starts_with(arg, "SAVE_SETTINGS:")) {
@@ -1935,6 +1923,35 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->doSlidingWindow = v[2] != 0.0;
         sett->doBackground    = v[3] != 0.0;
         sett->doWidthCal      = v[4] != 0.0;
+
+        // Toggling background subtraction changes whether the background boxes
+        // (and, in Integration mode, the background line) are shown. Redraw
+        // immediately so the user doesn't have to switch views to see them.
+        if (gDisplayMode == 5 && gCurrentBin > 0) {
+            // Save current axis ranges before redrawing
+            double xmin = gPad->GetUxmin();
+            double xmax = gPad->GetUxmax();
+            double ymin = gPad->GetUymin();
+            double ymax = gPad->GetUymax();
+            bool isLogy = gPad->GetLogy();
+
+            canvas->cd();
+            gCurrentHist = matrix->GetDiagEx(gCurrentBin, BaseName(currentMatrixPath));
+
+            // Restore axis ranges
+            gCurrentHist->GetXaxis()->SetRangeUser(xmin, xmax);
+            if (isLogy)
+                gCurrentHist->GetYaxis()->SetRangeUser(TMath::Power(10, ymin), TMath::Power(10, ymax));
+            else
+                gCurrentHist->GetYaxis()->SetRangeUser(ymin, ymax);
+
+            gCurrentHist->Draw();
+            CleanupAutofitDisplay();
+            DrawMarkers(true);
+            PushCanvasUpdate();
+        } else {
+            DrawMarkers(); // refreshes the draggable boxes to match, if a projection is shown
+        }
     }
     else if (starts_with(arg, "DISPLAY_OPTIONS:")) {
         // order: displaySingle|displayAvg|colour
@@ -2084,7 +2101,6 @@ void ProcessData(unsigned connid, const std::string &arg)
         }
         
         // Don't switch views - just acknowledge the panel was opened
-        std::cout << "Levels panel opened - keeping current view (mode " << gDisplayMode << ")" << std::endl;
     }
     else if (arg == "SHOWMATRIX") {
         if (!matrix) {
@@ -2157,7 +2173,6 @@ void ProcessData(unsigned connid, const std::string &arg)
         CleanupAutofitDisplay();
         DrawMarkers();
         PushCanvasUpdate();
-        window->Send(connid, "Showing bin 1 projection");
     }
     else if (arg == "SHOW_WIDTH_CALIB") {
         if (!matrix) {
@@ -2280,7 +2295,10 @@ void ProcessData(unsigned connid, const std::string &arg)
         
         // Enable the width calibration checkbox by telling frontend it's available
         window->Send(connid, "WIDTH_CALIB_AVAILABLE:1");
-        
+        // The "Use width calibration" checkbox is only usable if valid (non-zero)
+        // calibration parameters exist -- merely viewing the points isn't enough.
+        SendWidthCalibDone(connid);
+
         // Send the current calibration parameters to UI (from settings file)
         std::string msg = "WIDTH_CALIB_PARAMS:";
         msg += std::to_string(sett->widthCal[0][0]) + "|" + std::to_string(sett->widthCal[0][1]) + "|";
@@ -2331,7 +2349,9 @@ void ProcessData(unsigned connid, const std::string &arg)
         msg += std::to_string(sett->widthCal[0][0]) + "|" + std::to_string(sett->widthCal[0][1]) + "|";
         msg += std::to_string(sett->widthCal[1][0]) + "|" + std::to_string(sett->widthCal[1][1]);
         window->Send(connid, msg);
-        
+        // A fit was just performed, so the calibration is now usable.
+        SendWidthCalibDone(connid);
+
         // Redraw the plot with the new fit lines
         canvas->cd();
         canvas->Clear();
@@ -2538,26 +2558,18 @@ void ProcessData(unsigned connid, const std::string &arg)
         PushCanvasUpdate();
     }
     else if (arg == "SHOW_GSF_RESULTS") {
-        std::cout << "=== SHOW_GSF_RESULTS handler called ===" << std::endl;
         
         if (!gSFColl) {
-            std::cout << "ERROR: gSFColl is null" << std::endl;
             window->Send(connid, "GSF_RESULTS:ERROR:No gSF results available. Run ShapeIt first.");
             return;
         }
         
-        std::cout << "gSFColl exists, checking display options..." << std::endl;
-        std::cout << "  displayAvg: " << sett->displayAvg << std::endl;
-        std::cout << "  displaySingle: " << sett->displaySingle << std::endl;
-        std::cout << "  GetNSmooth(): " << gSFColl->GetNSmooth() << std::endl;
-        std::cout << "  GetN(): " << gSFColl->GetN() << std::endl;
         
         // Check if we have anything to display
         bool hasAverage = sett->displayAvg && (gSFColl->GetNSmooth() > 0);
         bool hasIndividual = sett->displaySingle && (gSFColl->GetN() > 0);
         
         if (!hasAverage && !hasIndividual) {
-            std::cout << "ERROR: No display options enabled" << std::endl;
             window->Send(connid, "GSF_RESULTS:ERROR:No gSF display options selected. Enable 'Display Average' or 'Display Individual' in Options panel.");
             return;
         }
@@ -2567,10 +2579,8 @@ void ProcessData(unsigned connid, const std::string &arg)
         
         // Show smoothed/average graph if enabled
         if (sett->displayAvg && hasAverage) {
-            std::cout << "Extracting average graph data..." << std::endl;
             TGraphAsymmErrors *smoothGraph = gSFColl->getAvgGraph();
             if (smoothGraph && smoothGraph->GetN() > 0) {
-                std::cout << "  Average graph has " << smoothGraph->GetN() << " points" << std::endl;
                 resultText << "gSF values for smoothed graph:\n";
                 resultText << "energy    gSF   error gSF\n";
                 
@@ -2587,16 +2597,13 @@ void ProcessData(unsigned connid, const std::string &arg)
                 }
                 resultText << "\n";
             } else {
-                std::cout << "WARNING: Average graph is null or empty" << std::endl;
             }
         }
         
         // Show individual merged data points if enabled (sorted by energy)
         if (sett->displaySingle && hasIndividual) {
-            std::cout << "Extracting individual merged data points..." << std::endl;
             TGraphErrors *mergedGraph = gSFColl->getMergedGraph();
             if (mergedGraph && mergedGraph->GetN() > 0) {
-                std::cout << "  Merged graph has " << mergedGraph->GetN() << " points" << std::endl;
                 resultText << "Individual gSF data points (all iterations merged, sorted by energy):\n";
                 resultText << "energy    gSF   error\n";
                 
@@ -2609,16 +2616,13 @@ void ProcessData(unsigned connid, const std::string &arg)
                 }
                 resultText << "\n";
             } else {
-                std::cout << "WARNING: Merged graph is null or empty" << std::endl;
             }
         }
         
         // Show literature data if loaded
         if (sett->doOslo) {
-            std::cout << "Extracting literature graph data..." << std::endl;
             TGraphErrors *litGraph = gSFColl->getLitGraph();
             if (litGraph && litGraph->GetN() > 0) {
-                std::cout << "  Literature graph has " << litGraph->GetN() << " points" << std::endl;
                 resultText << "Literature gSF values:\n";
                 resultText << "energy    gSF    error\n";
                 
@@ -2630,16 +2634,12 @@ void ProcessData(unsigned connid, const std::string &arg)
                     resultText << e << " " << g << " " << dg << "\n";
                 }
             } else {
-                std::cout << "  Literature graph is null or empty" << std::endl;
             }
         }
         
         std::string finalText = resultText.str();
-        std::cout << "Generated " << finalText.length() << " characters of output" << std::endl;
-        std::cout << "First 200 chars: " << finalText.substr(0, std::min((size_t)200, finalText.length())) << std::endl;
         
         window->Send(connid, "GSF_RESULTS:SUCCESS:" + finalText);
-        std::cout << "=== SHOW_GSF_RESULTS complete ===" << std::endl;
     }
     else if (starts_with(arg, "SHOWBINPROJ:")) {
         if (!matrix) {
@@ -2689,14 +2689,10 @@ void ProcessData(unsigned connid, const std::string &arg)
         }
     }
     else if (starts_with(arg, "LEVELENERGIES:")) {
-        std::cout << "*** LEVELENERGIES HANDLER CALLED ***" << std::endl;
         auto v = ParsePipeDoubles(after_prefix(arg, "LEVELENERGIES:"));
-        std::cout << "*** Parsed " << v.size() << " values ***" << std::endl;
         if (v.size() != 12) {
-            std::cout << "*** ERROR: Expected 12 values, got " << v.size() << " ***" << std::endl;
             return;
         }
-        std::cout << "*** Setting levEne[0-3] to: " << v[0] << ", " << v[1] << ", " << v[2] << ", " << v[3] << " ***" << std::endl;
         
         // Store previous multiplet checkbox states to detect changes
         bool hadDoublet1 = sett->doDoublet[0];
@@ -2730,15 +2726,6 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->fixTripletWidth[0] = v[10] != 0.0;
         sett->fixTripletWidth[1] = v[11] != 0.0;
         
-        std::cout << "*** Level energies updated successfully ***" << std::endl;
-        std::cout << "*** Doublet 1: " << (sett->doDoublet[0] ? "ENABLED" : "DISABLED") 
-                  << ", fix width: " << (sett->fixDoubletWidth[0] ? "YES" : "NO") << " ***" << std::endl;
-        std::cout << "*** Doublet 2: " << (sett->doDoublet[1] ? "ENABLED" : "DISABLED") 
-                  << ", fix width: " << (sett->fixDoubletWidth[1] ? "YES" : "NO") << " ***" << std::endl;
-        std::cout << "*** Triplet 1: " << (sett->doTriplet[0] ? "ENABLED" : "DISABLED") 
-                  << ", fix width: " << (sett->fixTripletWidth[0] ? "YES" : "NO") << " ***" << std::endl;
-        std::cout << "*** Triplet 2: " << (sett->doTriplet[1] ? "ENABLED" : "DISABLED") 
-                  << ", fix width: " << (sett->fixTripletWidth[1] ? "YES" : "NO") << " ***" << std::endl;
         
         // Detect if multiplet state or width fix state changed
         bool multipletStateChanged = (hadDoublet1 != sett->doDoublet[0]) || (hadDoublet2 != sett->doDoublet[1]) ||
@@ -2750,7 +2737,6 @@ void ProcessData(unsigned connid, const std::string &arg)
         
         // If in Autofit mode and viewing a bin projection, ALWAYS re-fit when any level energy changes
         if (sett->mode == 2 && gDisplayMode == 5 && gCurrentBin > 0) {
-            std::cout << "Multiplet settings changed in Autofit mode: re-fitting bin " << gCurrentBin << "..." << std::endl;
             
             // Save current axis ranges before redrawing
             double xmin = gPad->GetUxmin();
@@ -2801,13 +2787,9 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->fixPeakPos[level] = enable;
         sett->peakPos[level] = position;
         
-        std::cout << "Peak position for level " << (level+1) << ": " 
-                  << (enable ? "ENABLED" : "DISABLED") 
-                  << " at " << position << " keV" << std::endl;
         
         // If in Autofit mode and viewing a bin projection, ALWAYS re-fit when peak position changes
         if (sett->mode == 2 && gDisplayMode == 5 && gCurrentBin > 0) {
-            std::cout << "Peak position changed in Autofit mode: re-fitting bin " << gCurrentBin << "..." << std::endl;
             
             // Save current axis ranges before redrawing
             double xmin = gPad->GetUxmin();
@@ -2858,13 +2840,9 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->fixDoubletPeakPos[level] = enable;
         sett->doubletPeakPos[level] = position;
         
-        std::cout << "Doublet peak position for level " << (level+1) << ": " 
-                  << (enable ? "ENABLED" : "DISABLED") 
-                  << " at " << position << " keV" << std::endl;
         
         // If in Autofit mode and viewing a bin projection, ALWAYS re-fit when doublet peak position changes
         if (sett->mode == 2 && gDisplayMode == 5 && gCurrentBin > 0) {
-            std::cout << "Doublet peak position changed in Autofit mode: re-fitting bin " << gCurrentBin << "..." << std::endl;
             
             // Save current axis ranges before redrawing
             double xmin = gPad->GetUxmin();
@@ -2915,13 +2893,9 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->fixTripletPeakPos[level] = enable;
         sett->tripletPeakPos[level] = position;
         
-        std::cout << "Triplet peak position for level " << (level+1) << ": " 
-                  << (enable ? "ENABLED" : "DISABLED") 
-                  << " at " << position << " keV" << std::endl;
         
         // If in Autofit mode and viewing a bin projection, ALWAYS re-fit when triplet peak position changes
         if (sett->mode == 2 && gDisplayMode == 5 && gCurrentBin > 0) {
-            std::cout << "Triplet peak position changed in Autofit mode: re-fitting bin " << gCurrentBin << "..." << std::endl;
             
             // Save current axis ranges before redrawing
             double xmin = gPad->GetUxmin();
@@ -2958,12 +2932,10 @@ void ProcessData(unsigned connid, const std::string &arg)
         //   - fixDoubletWidth[0-1] (via keepWidths flags)
         auto v = ParsePipeDoubles(after_prefix(arg, "NEW_PEAK_CONFIG:"));
         if (v.size() != 14) {
-            std::cout << "ERROR: NEW_PEAK_CONFIG expected 14 values, got " << v.size() << std::endl;
             window->Send(connid, "Malformed NEW_PEAK_CONFIG message.");
             return;
         }
         
-        std::cout << "Processing NEW_PEAK_CONFIG message..." << std::endl;
         
         // Level 1 Peak 2 (doublet)
         sett->doDoublet[0] = v[0] != 0.0;
@@ -2993,23 +2965,9 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->fixDoubletWidth[1] = v[13] != 0.0;
         sett->fixTripletWidth[1] = v[13] != 0.0;  // Both controlled by same checkbox
         
-        std::cout << "NEW_PEAK_CONFIG applied:" << std::endl;
-        std::cout << "  Level 1 Peak 2: " << (sett->doDoublet[0] ? "ON" : "OFF") 
-                  << " at " << sett->doubletPeakPos[0] << " keV" 
-                  << (sett->fixDoubletPeakPos[0] ? " (FIXED)" : " (FREE)") << std::endl;
-        std::cout << "  Level 1 Peak 3: " << (sett->doTriplet[0] ? "ON" : "OFF") 
-                  << " at " << sett->tripletPeakPos[0] << " keV"
-                  << (sett->fixTripletPeakPos[0] ? " (FIXED)" : " (FREE)") << std::endl;
-        std::cout << "  Level 2 Peak 2: " << (sett->doDoublet[1] ? "ON" : "OFF") 
-                  << " at " << sett->doubletPeakPos[1] << " keV"
-                  << (sett->fixDoubletPeakPos[1] ? " (FIXED)" : " (FREE)") << std::endl;
-        std::cout << "  Level 2 Peak 3: " << (sett->doTriplet[1] ? "ON" : "OFF") 
-                  << " at " << sett->tripletPeakPos[1] << " keV"
-                  << (sett->fixTripletPeakPos[1] ? " (FIXED)" : " (FREE)") << std::endl;
         
         // If in Autofit mode and viewing a bin projection, refit with new peak configuration
         if (sett->mode == 2 && gDisplayMode == 5 && gCurrentBin > 0) {
-            std::cout << "NEW_PEAK_CONFIG in Autofit mode: re-fitting bin " << gCurrentBin << "..." << std::endl;
             
             // Save current axis ranges before redrawing
             double xmin = gPad->GetUxmin();
@@ -3060,7 +3018,8 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->widthCal[0][1] = v[1];
         sett->widthCal[1][0] = v[2];
         sett->widthCal[1][1] = v[3];
-        
+        SendWidthCalibDone(connid);
+
         // Only redraw if we're currently viewing width calibration (mode 7)
         if (gDisplayMode == 7 && matrix) {
             // Use the saved ranges from when the plot was first created
@@ -3146,10 +3105,13 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->lit_alpha = v[0];
         sett->lit_norm = v[1];
         
+        // If MC results are currently displayed, don't overwrite the canvas with gSF results.
+        // The alpha value is already stored above and will be used on the next ShapeIt run.
+        if (gDisplayMode == 8)
+            return;
+
         // If we have a collector (after ShapeIt has been run), apply the transformation
         if (gSFColl) {
-            std::cout << "Applying alpha transformation: alpha=" << sett->lit_alpha 
-                      << ", norm=" << sett->lit_norm << std::endl;
             gSFColl->Transform(sett->lit_norm, sett->lit_alpha);
             
             // Force complete redraw by clearing and rebuilding the graph display
@@ -3274,8 +3236,6 @@ void ProcessData(unsigned connid, const std::string &arg)
         }
     }
     else if (arg == "REDRAW_GRAPH") {
-        std::cout << "DEBUG: REDRAW_GRAPH handler reached" << std::endl;
-        std::cout.flush();
         
         // Redraw the gSF graph with current transformation (mirrors TransGraph() from native code)
         if (!gSFColl) {
@@ -3283,7 +3243,6 @@ void ProcessData(unsigned connid, const std::string &arg)
             return;
         }
         
-        std::cout << "Redrawing graph with current transformation..." << std::endl;
         
         // Get fresh graphs from collector (already transformed)
         TMultiGraph *diagGraph = gSFColl->getMultGraph();
@@ -3425,59 +3384,32 @@ void ProcessData(unsigned connid, const std::string &arg)
         window->Send(connid, "Graph redrawn with alpha=" + std::to_string(sett->lit_alpha));
     }
     else if (starts_with(arg, "RUN_MC_ALPHA:")) {
-        std::cout << "\n========================================" << std::endl;
-        std::cout << "RUN_MC_ALPHA HANDLER ENTERED" << std::endl;
-        std::cout << "========================================" << std::endl;
-        std::cout.flush();  // Force immediate output
         
-        std::cout << "Raw message: " << arg << std::endl;
-        std::cout.flush();
         
-        std::cout << "About to parse doubles..." << std::endl;
-        std::cout.flush();
         
         auto v = ParsePipeDoubles(after_prefix(arg, "RUN_MC_ALPHA:"));
         
-        std::cout << "Parsing complete. Got " << v.size() << " values" << std::endl;
-        std::cout.flush();
         
         if (v.size() != 3) {
-            std::cout << "ERROR: Expected 3 values, got " << v.size() << std::endl;
-            std::cout.flush();
             window->Send(connid, "Malformed RUN_MC_ALPHA message.");
             return;
         }
         
-        std::cout << "Extracting parameters..." << std::endl;
-        std::cout.flush();
         
         int nIter = (int)v[0];
         double exiMin = v[1];
         double exiMax = v[2];
         
-        std::cout << "Parameters extracted:" << std::endl;
-        std::cout << "  nIter = " << nIter << std::endl;
-        std::cout << "  exiMin = " << exiMin << std::endl;
-        std::cout << "  exiMax = " << exiMax << std::endl;
-        std::cout.flush();
         
-        std::cout << "About to call RunMonteCarlo()..." << std::endl;
-        std::cout.flush();
         
         RunMonteCarlo(connid, nIter, exiMin, exiMax);
         
-        std::cout << "RunMonteCarlo() returned successfully" << std::endl;
-        std::cout << "========================================" << std::endl;
-        std::cout.flush();
     }
     else if (arg == "STOP_MC") {
-        std::cout << "STOP_MC command received" << std::endl;
         if (gMCState) {
-            std::cout << "Setting stopRequested flag on MC state" << std::endl;
             gMCState->stopRequested = true;
             window->Send(connid, "MC_STOPPING");
         } else {
-            std::cout << "No active MC simulation to stop" << std::endl;
             window->Send(connid, "No active Monte Carlo simulation.");
         }
     }
@@ -3523,15 +3455,9 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->fixTripletWidth[0] = v[20] != 0.0;
         sett->fixTripletWidth[1] = v[21] != 0.0;
 
-        std::cout << "*** About to call RunShapeIt() ***" << std::endl;
-        std::cout << "*** Doublet 1: " << (sett->doDoublet[0] ? "ENABLED" : "DISABLED") << " ***" << std::endl;
-        std::cout << "*** Doublet 2: " << (sett->doDoublet[1] ? "ENABLED" : "DISABLED") << " ***" << std::endl;
-        std::cout << "*** Triplet 1: " << (sett->doTriplet[0] ? "ENABLED" : "DISABLED") << " ***" << std::endl;
-        std::cout << "*** Triplet 2: " << (sett->doTriplet[1] ? "ENABLED" : "DISABLED") << " ***" << std::endl;
         
         RunShapeIt(connid);
         
-        std::cout << "*** RunShapeIt() returned ***" << std::endl;
     }
     else {
         // Message not recognized - silently ignore
@@ -3559,6 +3485,11 @@ void WebShapeIt()
     
     gEnv->SetValue("WebGui.ConnCredits", "100");
     gStartDir = gSystem->WorkingDirectory();
+
+    // Suppress ROOT's informational logging (e.g. the "Info in <ProcessLinesForObject>"
+    // spam emitted to the terminal while dragging markers/boxes). Only warnings and
+    // errors are shown; user-facing status goes to the message box via window->Send().
+    gErrorIgnoreLevel = kWarning;
 
     // Configure stat box size (default is ~0.3x0.2 NDC units, reduce by factor of 2)
     gStyle->SetStatW(0.15);  // width: 0.3 -> 0.15
@@ -3610,7 +3541,6 @@ void WebShapeIt()
             sett->rhoFileName = ResolveRelativeTo(settDir, sett->rhoFileName);
             sett->discreteLevelFile = ResolveRelativeTo(settDir, sett->discreteLevelFile);
             
-            std::cout << "Loaded settings from: " << cmdLineSettings << std::endl;
             
             // Auto-load the matrix file referenced in settings (same as LOAD_SETTINGS handler)
             if (!sett->dataFileName.empty() && !gSystem->AccessPathName(sett->dataFileName.c_str())) {
@@ -3627,14 +3557,10 @@ void WebShapeIt()
                     // Set the matrix (this will be drawn when UI connects)
                     matrix->SetMatrix(idx);
                 } else {
-                    std::cout << "Warning: matrix '" << sett->matrixName 
-                              << "' not found in " << sett->dataFileName << std::endl;
                 }
             } else if (!sett->dataFileName.empty()) {
-                std::cout << "Warning: matrix file not found: " << sett->dataFileName << std::endl;
             }
         } else {
-            std::cout << "Warning: settings file not found: " << cmdLineSettings << std::endl;
         }
     } else {
         // No environment variable set - start with empty settings (no output needed)
@@ -3677,5 +3603,4 @@ void WebShapeIt()
     window->SetGeometry(1200, 700);
     window->Show();
 
-    std::cout << "\nShapeIt 2.0 prototype running.\n";
 }

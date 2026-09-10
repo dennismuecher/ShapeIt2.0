@@ -16,12 +16,8 @@ ShapeCollector* ShapeController::RunAnalysis(ShapeSetting* sett, ShapeMatrix* ma
 
     sett->nOfBins = sett->SizeToBin();
 
-    std::cout << "Running ShapeIt analysis..." << std::endl;
-    
     ShapeCollector* collector = new ShapeCollector(sett, matrix);
     collector->Collect();
-
-    std::cout << "ShapeIt analysis complete." << std::endl;
     
     return collector;
 }

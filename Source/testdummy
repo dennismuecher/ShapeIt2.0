@@ -1,0 +1,66 @@
+/Users/dennismuecher/Library/Mobile Documents/com~apple~CloudDocs/ShapeIt/ShapeIt2.0/88Kr/Raw/Kr88.root
+
+
+matrixName matrix120
+MeV: 1
+mode 2
+doInterpol 1
+doOslo 0
+alphaLimit -1 1
+alphaIter 100
+doEffi 0
+doAutoScale 0
+colour 1
+doGRF 0
+displayAverage 0
+displaySingle 1
+doSlidingWindow 0
+doBinVariation 0
+doBackground 1
+verbose 0
+gSF_norm 1
+lit_norm 1
+lit_alpha 0
+lit_alpha_error 0 0
+level1 200 340.2
+level1_2 0 0
+level1_3 0 0
+doDoublet1 0
+doTriplet1 0
+fixDoubletWidth1 1
+fixTripletWidth1 1
+bg_level1 100 150 335.277 385.893
+bg_level2 638.264 688.692 872.089 920.795
+level2 686.6 860.1
+level2_2 0 0
+level2_3 0 0
+doDoublet2 0
+doTriplet2 0
+fixDoubletWidth2 1
+fixTripletWidth2 1
+excitation 2500 7000
+excitationMCLimits 2000 3000
+excitation_bin_1 400
+excitation_bin_2 400
+nOfBins 12
+eff_corr 1
+minCounts 0
+doWidthCal 0
+widthCal 0 0 0 0
+fixPeakPos1 0
+peakPos1 266.744
+fixPeakPos2 0
+peakPos2 784.2
+fixDoubletPeakPos1 0
+doubletPeakPos1 0
+fixDoubletPeakPos2 0
+doubletPeakPos2 0
+fixTripletPeakPos1 0
+tripletPeakPos1 0
+fixTripletPeakPos2 0
+tripletPeakPos2 0
+rhoFileName 
+rhoScale 1
+spinLow 0
+spinHigh 8
+discreteLevelFile  100

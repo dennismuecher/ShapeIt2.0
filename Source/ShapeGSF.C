@@ -166,12 +166,11 @@ void ShapeGSF::FillgSF() {
     //clean up matrix
     m_matrix->Reset();
     
+    // Diag() already fills all integration vectors (Integrate/IntegrateBg/
+    // IntegrateSquare/IntegrateCube) at its end, so calling them again here was
+    // redundant -- it recomputed identical values and printed every bin twice.
     m_matrix->Diag();
-    m_matrix->Integrate();
-    m_matrix->IntegrateBg();
-    m_matrix->IntegrateSquare();
-    m_matrix->IntegrateCube();
-   
+
     //if autofit or background subtraction is set, perform autofit using Gauss
     if (m_sett->mode == 2 || m_sett->doBackground)
         m_matrix->FitIntegral();

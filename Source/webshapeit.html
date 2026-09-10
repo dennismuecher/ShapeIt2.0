@@ -92,7 +92,7 @@ COMMUNICATION PROTOCOL:
           <input type="checkbox" id="verbose-toggle" style="margin: 0;">
         </label>
         <div class="menu-divider"></div>
-        <button class="menu-item" id="btn-show-width-calib">Show width calibration...</button>
+        <button class="menu-item" id="btn-show-width-calib">Width calibration...</button>
         <button class="menu-item" id="btn-show-level-density">Show level density...</button>
         <button class="menu-item" id="btn-show-discrete-levels">Show discrete levels...</button>
         <button class="menu-item" id="btn-show-settings-file">Show settings file...</button>
@@ -397,8 +397,8 @@ COMMUNICATION PROTOCOL:
             <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
               <input type="checkbox" id="opt-interpol" checked> Sewing interpolation
             </label>
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
-              <input type="checkbox" id="opt-oslo"> Display expectation
+            <label id="opt-oslo-label" style="display: flex; align-items: center; gap: 8px; font-size: 13px; opacity: 0.5;" title="Load a gSF literature data file first (Settings -> Load gSF literature (Oslo) data...)">
+              <input type="checkbox" id="opt-oslo" disabled> Display expectation
             </label>
             <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
               <input type="checkbox" id="opt-sliding"> Sliding window variation
@@ -684,7 +684,8 @@ COMMUNICATION PROTOCOL:
   let currentSettingsPath = null;   // Full path to loaded settings file
   let startDir = '';                // Initial directory for file browser
   let settingsDirty = false;        // True if settings changed since last save
-  let widthCalibAvailable = false;  // True if width calibration data exists
+  let widthCalibAvailable = false;  // True if a matrix is loaded (Show width calibration usable)
+  let widthCalibDone = false;       // True if a width calibration has actually been performed
   let pendingSavePath = null;       // Path for pending save (used by version dialog)
   let effiFileName = '';            // Efficiency correction file path
   let hasEffiFile = false;          // True if efficiency file is loaded
@@ -735,15 +736,19 @@ COMMUNICATION PROTOCOL:
     const label = document.getElementById('width-calib-label');
     const showBtn = document.getElementById('btn-show-width-calib');
     
-    if (widthCalibAvailable) {
+    // Show button only needs a loaded matrix; the checkbox additionally needs a
+    // calibration to have actually been performed (otherwise widths would be zero).
+    showBtn.disabled = !widthCalibAvailable;
+
+    if (widthCalibDone) {
       checkbox.disabled = false;
       label.style.color = '';
-      showBtn.disabled = false;
+      label.removeAttribute('title');
     } else {
       checkbox.disabled = true;
       checkbox.checked = false;
       label.style.color = '#999';
-      showBtn.disabled = true;
+      label.title = 'Perform a width calibration first (Display -> Show width calibration...)';
     }
   }
 
@@ -1217,6 +1222,17 @@ COMMUNICATION PROTOCOL:
         else if (msg.startsWith('DIRERROR:')) {
           setStatus(msg.slice(9));
         }
+
+        // gSF literature data availability - enable/disable "Display expectation"
+        else if (msg.startsWith('OSLO_AVAILABLE:')) {
+          const avail = msg.slice(15) !== '0';
+          const box = document.getElementById('opt-oslo');
+          const lbl = document.getElementById('opt-oslo-label');
+          box.disabled = !avail;
+          lbl.style.opacity = avail ? '1' : '0.5';
+          if (avail) lbl.removeAttribute('title');
+          else { box.checked = false; lbl.title = 'Load a gSF literature data file first (Settings -> Load gSF literature (Oslo) data...)'; }
+        }
         
         // Matrix list for dropdown
         else if (msg.startsWith('MATRIXLIST:')) {
@@ -1404,6 +1420,12 @@ COMMUNICATION PROTOCOL:
         // Width calibration availability status
         else if (msg.startsWith('WIDTH_CALIB_AVAILABLE:')) {
           widthCalibAvailable = (msg.slice(22) === '1');
+          updateWidthCalibState();
+        }
+
+        // Whether a width calibration has actually been performed (enables checkbox)
+        else if (msg.startsWith('WIDTH_CALIB_DONE:')) {
+          widthCalibDone = (msg.slice(17) === '1');
           updateWidthCalibState();
         }
         
