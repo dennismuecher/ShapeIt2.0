@@ -12,6 +12,13 @@
 
 #include "../Include/ShapeSetting.h"
 
+// Strip trailing \r so settings files with Windows-style CRLF line endings
+// don't embed invisible characters in file paths.
+static void TrimCR(std::string &s) {
+    if (!s.empty() && s.back() == '\r')
+        s.pop_back();
+}
+
 ShapeSetting::ShapeSetting(void)
 {
     ResetWidth();
@@ -265,8 +272,7 @@ void ShapeSetting::SaveSettings() {
     outfile << "tripletPeakPos2 " << tripletPeakPos[1] <<"\n";
     outfile << "rhoFileName " << rhoFileName <<"\n";
     outfile << "rhoScale " << rhoScale <<"\n";
-    outfile << "spinLow " << spinLow <<"\n";
-    outfile << "spinHigh " << spinHigh <<"\n";
+
 
     outfile << "discreteLevelFile " << discreteLevelFile << " " << discreteBins << "\n";
     
@@ -301,10 +307,12 @@ void ShapeSetting::ReadSettings() {
                 getline(inp,line);
             }
             dataFileName = line;
+            TrimCR(dataFileName);
         } else {
             // Old format (ShapeIt 1.0)
             isVersion2Format = false;
             dataFileName = line;
+            TrimCR(dataFileName);
         }
         
         if (verbose) {
@@ -313,6 +321,7 @@ void ShapeSetting::ReadSettings() {
         //get the literature data filename; this goes extra because of issues wih absolute paths containing white spaces
         getline(inp,line);
         osloFileName = line;
+        TrimCR(osloFileName);
         
 		//get the efficiency data filename; due to backwards compatibility, check if this line contains the matrixName information (old file format)
         getline(inp,line);
@@ -324,6 +333,7 @@ void ShapeSetting::ReadSettings() {
 		}
 		else {
 			effiFileName = line;
+			TrimCR(effiFileName);
 		}
 		
         //now get everything else
@@ -391,15 +401,13 @@ void ShapeSetting::ReadSettings() {
             if (word == "tripletPeakPos2" ) isstr >> tripletPeakPos[1];
             if (word == "discreteLevelFile" ) { isstr >>discreteLevelFile; isstr >>discreteBins;}
             if (word == "rhoScale" ) isstr >> rhoScale ;
-            if (word == "spinLow" ) isstr >> spinLow ;
-            if (word == "spinHigh" ) isstr >> spinHigh ;
+
 
             if (word == "rhoFileName" ) {
-                std::string pName;
-                rhoFileName.clear();
-                while (isstr >>pName)
-                    //rhoFileName+=" "+pName;
-                    rhoFileName+=pName;
+                getline(isstr, rhoFileName);
+                size_t start = rhoFileName.find_first_not_of(" \t");
+                rhoFileName = (start != std::string::npos) ? rhoFileName.substr(start) : "";
+                TrimCR(rhoFileName);
             }
             for (int i = 0; i < 6; i++) {
                 std::string ldname = "ldmodel"+to_string(i+1);
@@ -547,8 +555,7 @@ void ShapeSetting::PrintSettings(){
     std::cout  << "eff_corr " << eff_corr <<"\n";
     std::cout  << "minCounts " << minCounts <<"\n";
     std::cout  << "rhoScale " << rhoScale <<"\n";
-    std::cout  << "spinLow " << spinLow <<"\n";
-    std::cout  << "spinHigh " << spinHigh <<"\n";
+
     std::cout  << "doWidthCal " << doWidthCal <<"\n";
     std::cout  << "widthCal " << widthCal[0][0] <<" "<< widthCal[0][1] <<" "<< widthCal[1][0] <<" "<< widthCal[1][1] <<"\n";
     std::cout  << "fixPeakPos1 " << fixPeakPos[0] <<"\n";

@@ -42,8 +42,6 @@ public:
     double pTable[6];                        //ptable parameter for each ldmodel
     double cTable[6];                      //ctable parameter for each ldmodel
     double rhoScale = 1;                    //scaling factor for experimetnal level density
-    int spinLow = 0;                          //lower spin limit for partial level density
-    int spinHigh = 8;                          //upper spin limit for partial level density
     
     double rhoChi2LowLimit = 2;
     double rhoChi2HighLimit = 2;

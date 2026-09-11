@@ -1,19 +1,26 @@
 // WebShapeIt.cxx
 //
-// BACKUP TIMESTAMP: 2026-07-13 - Before string comparison refactor
-// TO RESTORE: Copy from git or search for "BACKUP_TIMESTAMP" in version control
+// C++ backend for the ShapeIt 2.0 web interface. Serves the browser frontend
+// via ROOT's RWebWindow/WebSocket and handles all analysis logic.
 //
-// First real increment of ShapeIt 2.0 -- NOT a mockup, this calls your actual
-// ShapeSetting/ShapeMatrix/ShapeController/ShapeCollector classes unchanged.
-// Only the Peaks and Energies panel is wired up; Mode/Options/Integration Bin
-// are deliberately left for the next pass, once this path is confirmed working.
+// Run from ShapeIt2.0/Source/:  root WebShapeIt.cxx
+// Optional:                     root WebShapeIt.cxx -- --settings path/to/file.txt
 //
-// Place this file in ShapeIt1.0/Source/ (next to ShapeController.h's siblings)
-// alongside webshapeit.html, then run:  root WebShapeIt.cxx
-//
-// Known limitation, on purpose for now: bin size (sett->exi_size) is hardcoded
-// below rather than wired to a UI panel yet, since Integration Bin isn't built
-// yet. Mode is always "Integration" (mode=1); Autofit isn't wired yet either.
+// IMPLEMENTED FEATURES:
+//   - Full analysis pipeline: Integration and Autofit modes, all settings wired up
+//   - Multiple peaks per level: single, doublet, and triplet with optional fixed positions
+//   - Background subtraction with two windows per level
+//   - Sliding window variation and bin size variation
+//   - Width calibration: linear fit of peak widths vs energy to guide autofits
+//   - Slope correction: alpha/normalization transformation applied to gSF and NLD
+//   - Monte Carlo alpha search: timer-based iterations with live canvas updates,
+//     four-panel summary on completion (chi² vs alpha, Ex_low vs alpha, histograms)
+//   - gSF scaling (manual and auto), efficiency correction (constant or file-based)
+//   - Oslo literature gSF and NLD comparison with MeV→keV auto-conversion
+//   - Matrix loading, 2D COLZ display, diagonal projection, per-bin projection
+//   - Draggable fit region and background boundary markers on projection plots
+//   - Settings load/save with ShapeIt 1.0 → 2.0 format upgrade
+//   - Discrete levels and level density display
 
 #include <ROOT/RWebWindow.hxx>
 #include "TCanvas.h"
@@ -1660,7 +1667,15 @@ void ProcessData(unsigned connid, const std::string &arg)
         
         // Sync all settings to UI (this updates all form fields to match loaded settings)
         SendSettingsSync(connid);
-        
+
+        // Enable "Display expectation" if the settings reference a valid gSF literature file.
+        // This must be sent after SendSettingsSync so the frontend can enable the checkbox.
+        {
+            bool osloOk = !sett->osloFileName.empty() &&
+                          !gSystem->AccessPathName(sett->osloFileName.c_str());
+            window->Send(connid, std::string("OSLO_AVAILABLE:") + (osloOk ? "1" : "0"));
+        }
+
         // Send status message AFTER everything else is synced (same as LOAD_SETTINGS does)
         // Only send if we actually loaded settings from a file
         if (!sett->settFileName.empty()) {
@@ -3540,6 +3555,7 @@ void WebShapeIt()
             sett->osloFileName = ResolveRelativeTo(settDir, sett->osloFileName);
             sett->rhoFileName = ResolveRelativeTo(settDir, sett->rhoFileName);
             sett->discreteLevelFile = ResolveRelativeTo(settDir, sett->discreteLevelFile);
+            sett->effiFileName = ResolveRelativeTo(settDir, sett->effiFileName);
             
             
             // Auto-load the matrix file referenced in settings (same as LOAD_SETTINGS handler)

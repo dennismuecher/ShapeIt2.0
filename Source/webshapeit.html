@@ -4,44 +4,44 @@
 ShapeIt 2.0 - Web Interface
 ═══════════════════════════════════════════════════════════════════════════════
 
-This is the web-based user interface for the ShapeIt nuclear physics analysis tool.
-It provides a browser-based alternative to the native desktop application.
+Browser frontend for the ShapeIt nuclear physics analysis tool. Communicates
+with the C++ backend (WebShapeIt.cxx) via WebSocket; JSROOT renders ROOT objects.
 
-Key components:
-  - Menu bar for file operations and settings management
-  - Sidebar with 4 tabs: Levels, Excitation & Bins, Projections, Options
-  - Main canvas area for JSROOT visualization of ROOT histograms
-  - Log panel at bottom for status messages and output
-  - File browser dialog for opening/saving files
-  - WebSocket connection to C++ backend for real-time communication
-
-The interface communicates with a C++ backend via WebSocket, sending commands
-and receiving updates. JSROOT library handles rendering of ROOT objects.
+UI STRUCTURE:
+  - Menu bar: File, Settings, Display, Transformation menus + settings filename
+  - Sidebar: 4 main tabs (Levels, Excitation & Bins, Projections, Options) plus
+    two hidden panels shown via menu: Width Calibration, Slope Correction
+  - Main canvas: JSROOT visualization (matrix, projections, gSF results, MC plots)
+  - Log panel: timestamped status messages, resizable via drag handle
+  - Modals: file browser, unsaved-changes exit dialog, settings format upgrade
+    dialog, settings file viewer, unit conversion warning (MeV → keV)
 
 FEATURES:
-  - Integration and Autofit modes for peak analysis
-  - Width calibration: Linear fit of peak widths vs energy to guide autofits
-  - Display options: Individual points, averages, color-coded peaks
-  - Settings persistence with modified/saved status tracking
-  - Real-time visualization of matrices, projections, and calibration plots
+  - Integration and Autofit modes; single/doublet/triplet peaks per level
+  - Width calibration: linear fit of peak widths vs energy to guide autofits
+  - Slope correction panel: manual alpha/normalization + Monte Carlo alpha search
+    (live per-iteration canvas updates, four-panel summary on completion)
+  - Oslo literature gSF and NLD data with MeV→keV auto-conversion warning
+  - Display options: individual points, averages, color-coded peaks
+  - Efficiency correction: constant factor or energy-dependent file
+  - Settings persistence: modified/saved status tracking in menu bar
+  - Settings load/save with ShapeIt 1.0 → 2.0 format upgrade prompt
 
-CODE STRUCTURE:
-  1. HTML (lines ~30-300): UI structure with menu bar, sidebar tabs, canvas holder
-  2. JavaScript imports (lines ~305-310): JSROOT libraries for ROOT visualization
-  3. Global state (lines ~315-340): WebSocket handle, settings path, dirty flag
-  4. Settings management (lines ~345-390): Track and display save/modified status
-  5. Logging (lines ~395-410): Status bar and log panel updates
-  6. Canvas setup (lines ~415-430): JSROOT canvas initialization
-  7. UI interactions (lines ~435-550): Tab switching, menus, resize handle
-  8. File browser (lines ~555-650): Modal dialog for open/save operations
-  9. WebSocket message handling (lines ~655-780): Server communication protocol
-  10. Event handlers (lines ~785-end): Input changes trigger server updates
+COMMUNICATION PROTOCOL (Frontend → Backend):
+  RUN, OPEN:<path>, SAVE_SETTINGS:<path>, LOAD_SETTINGS:<path>
+  SHOWMATRIX, SHOWPROJ, SHOWBIN:<n>, SHOW_GSF_RESULTS, SHOW_LEVEL_DENSITY
+  SHOW_WIDTH_CALIB, SHOW_DISCRETE_LEVELS, SHOW_SETTINGS_FILE
+  LEVELS:<lo1|hi1|lo2|hi2|exlo|exhi>, NBINSLO:<n>, NBINSHI:<n>
+  ALPHA_TRANSFORM:<alpha|lit_norm>, RUN_MC:<iterations|exiMin|exiMax>
+  STOP_MC, PEAK_CONFIG:<...>, PEAK_POS1:<...>, PEAK_POS2:<...>
+  LOAD_OSLO:<path>, LOAD_RHO:<path>, LOAD_DISCRETE:<path>, LOAD_EFFI:<path>
 
-COMMUNICATION PROTOCOL:
-  - Frontend -> Backend: Commands like "RUN:", "OPEN:", "SAVE_SETTINGS:", etc.
-  - Backend -> Frontend: "SETTINGS_SYNC:", "DIRLIST:", "LOG:", "NBINS:", etc.
-  - All changes mark settings as dirty and send updates immediately
-  - Width calibration: "SHOW_WIDTH_CALIB" / "WIDTH_CALIB_AVAILABLE:<0|1>"
+COMMUNICATION PROTOCOL (Backend → Frontend):
+  SETTINGS_SYNC:<pipe-delimited values>, DIRLIST:<path|entries>
+  MATRIXLIST:<index|names>, NBINS:<size0|size1|nLo|nHi>
+  GSF_RESULTS:<data>, WIDTH_CALIB_AVAILABLE:<0|1>, WIDTH_CALIB_PARAMS:<...>
+  MC_STARTED, MC_STOPPING, MC_STOPPED:<reason>, MC_RESULT:<alpha|chi2|exLow|iter|total>
+  UNIT_WARNING_MeV:<maxEnergy>, <any other string> → logged as status message
 
 ═══════════════════════════════════════════════════════════════════════════════
 -->
@@ -684,6 +684,7 @@ COMMUNICATION PROTOCOL:
   let currentSettingsPath = null;   // Full path to loaded settings file
   let startDir = '';                // Initial directory for file browser
   let settingsDirty = false;        // True if settings changed since last save
+  let intentionalExit = false;     // True when user confirmed exit via File menu
   let widthCalibAvailable = false;  // True if a matrix is loaded (Show width calibration usable)
   let widthCalibDone = false;       // True if a width calibration has actually been performed
   let pendingSavePath = null;       // Path for pending save (used by version dialog)
@@ -1303,7 +1304,8 @@ COMMUNICATION PROTOCOL:
           const mode = v[22];
           document.getElementById('mode-integration').checked = (mode !== 2);
           document.getElementById('mode-autofit').checked = (mode === 2);
-          
+          updatePeakSectionsForMode(mode);
+
           // Indices 23-30: Background energies (CORRECTED!)
           document.getElementById('bg1-lo1').value = v[23].toFixed(1);
           document.getElementById('bg1-hi1').value = v[24].toFixed(1);
@@ -1925,6 +1927,7 @@ COMMUNICATION PROTOCOL:
   }
 
   function doExit() {
+    intentionalExit = true;
     if (conn_handle) conn_handle.send('EXIT');
     window.close();
     setStatus('Exiting... (you can close this tab now)');
@@ -1940,10 +1943,20 @@ COMMUNICATION PROTOCOL:
   });
 
   document.getElementById('exit-cancel').addEventListener('click', hideExitDialog);
-  
+
   document.getElementById('exit-discard').addEventListener('click', () => {
     hideExitDialog();
     doExit();
+  });
+
+  // Intercept browser tab close / page unload when there are unsaved changes.
+  // Modern browsers don't allow custom dialog text here — they show their own
+  // "Leave site? Changes you made may not be saved." prompt instead.
+  window.addEventListener('beforeunload', (e) => {
+    if (settingsDirty && !intentionalExit) {
+      e.preventDefault();
+      e.returnValue = '';  // required for Chrome/Edge to trigger the prompt
+    }
   });
 
   document.getElementById('exit-save-current').addEventListener('click', () => {
