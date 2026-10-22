@@ -355,8 +355,20 @@ void SendMatrixListAndSelect(unsigned connid, const std::string &matrixPath, int
 // in sync after loading a settings file (previously loading a settings file
 // updated sett server-side but never told the browser, so the Peaks/Options
 // panels silently went stale).
+int ValidGsfPeakRef(int level, int requestedPeak)
+{
+    if (requestedPeak == 2 && sett->doDoublet[level])
+        return 2;
+    if (requestedPeak == 3 && sett->doTriplet[level])
+        return 3;
+    return 1;
+}
+
 void SendSettingsSync(unsigned connid)
 {
+    sett->gsfPeakRef[0] = ValidGsfPeakRef(0, sett->gsfPeakRef[0]);
+    sett->gsfPeakRef[1] = ValidGsfPeakRef(1, sett->gsfPeakRef[1]);
+
     std::string msg = "SETTINGS_SYNC:";
     msg += std::to_string(sett->levEne[0]) + "|" + std::to_string(sett->levEne[1]) + "|";
     msg += std::to_string(sett->levEne[2]) + "|" + std::to_string(sett->levEne[3]) + "|";
@@ -397,7 +409,8 @@ void SendSettingsSync(unsigned connid)
     msg += std::to_string(sett->fixDoubletPeakPos[0] ? 1 : 0) + "|" + std::to_string(sett->doubletPeakPos[0]) + "|";
     msg += std::to_string(sett->fixDoubletPeakPos[1] ? 1 : 0) + "|" + std::to_string(sett->doubletPeakPos[1]) + "|";
     msg += std::to_string(sett->fixTripletPeakPos[0] ? 1 : 0) + "|" + std::to_string(sett->tripletPeakPos[0]) + "|";
-    msg += std::to_string(sett->fixTripletPeakPos[1] ? 1 : 0) + "|" + std::to_string(sett->tripletPeakPos[1]);
+    msg += std::to_string(sett->fixTripletPeakPos[1] ? 1 : 0) + "|" + std::to_string(sett->tripletPeakPos[1]) + "|";
+    msg += std::to_string(sett->gsfPeakRef[0]) + "|" + std::to_string(sett->gsfPeakRef[1]);
     
 
     
@@ -1405,7 +1418,19 @@ void RunShapeIt(unsigned connid)
         }
     }
 
-    
+    {
+        std::ofstream _dbg("/tmp/shapeit_debug.txt", std::ios::app);
+        _dbg << "=== RunShapeIt ===\n";
+        _dbg << "freshGraphs.size()=" << freshGraphs.size() << " allX.size()=" << allX.size() << "\n";
+        int _nLit=0, _nAvg=0, _nData=0;
+        for (auto &_fg : freshGraphs) {
+            if (_fg.isLiterature) _nLit++;
+            else if (_fg.isAverage) _nAvg++;
+            else _nData++;
+        }
+        _dbg << "  lit=" << _nLit << " avg=" << _nAvg << " data=" << _nData << "\n";
+    }
+
     // If coming from width calibration view (mode 7), the TMultiGraph owns the TGraphs
     // we created, and canvas->Clear() will try to delete them. To avoid any potential
     // ownership/deletion issues, manually delete the primitives BEFORE calling Clear().
@@ -2946,7 +2971,7 @@ void ProcessData(unsigned connid, const std::string &arg)
         //   - doTriplet[0-1], fixTripletPeakPos[0-1], tripletPeakPos[0-1]
         //   - fixDoubletWidth[0-1] (via keepWidths flags)
         auto v = ParsePipeDoubles(after_prefix(arg, "NEW_PEAK_CONFIG:"));
-        if (v.size() != 14) {
+        if (v.size() != 16) {
             window->Send(connid, "Malformed NEW_PEAK_CONFIG message.");
             return;
         }
@@ -2979,6 +3004,10 @@ void ProcessData(unsigned connid, const std::string &arg)
         // Level 2 keep widths equal
         sett->fixDoubletWidth[1] = v[13] != 0.0;
         sett->fixTripletWidth[1] = v[13] != 0.0;  // Both controlled by same checkbox
+        
+        // gSF reference peak selection (1=peak1, 2=peak2, 3=peak3)
+        sett->gsfPeakRef[0] = ValidGsfPeakRef(0, (int)v[14]);
+        sett->gsfPeakRef[1] = ValidGsfPeakRef(1, (int)v[15]);
         
         
         // If in Autofit mode and viewing a bin projection, refit with new peak configuration

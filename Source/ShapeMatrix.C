@@ -104,6 +104,57 @@ TH1D* ShapeMatrix::GetDiagEx(int bbin, std::string title) {
         return NULL;
 }
 
+static int MultipletTypeForLevel(ShapeSetting *sett, int level) {
+    bool validDoublet = sett->doDoublet[level] && sett->doubletPeakPos[level] > 0;
+    bool validTriplet = sett->doTriplet[level] && sett->tripletPeakPos[level] > 0;
+    if (validDoublet && validTriplet)
+        return 3;
+    if (validTriplet)
+        return 2;
+    if (validDoublet)
+        return 1;
+    return 0;
+}
+
+static int SelectedGsfPeakForLevel(ShapeSetting *sett, int level, int multiplet_type) {
+    int gsfPeak = sett->gsfPeakRef[level];
+    if (gsfPeak == 2 && (multiplet_type == 1 || multiplet_type == 3))
+        return 2;
+    if (gsfPeak == 3 && (multiplet_type == 2 || multiplet_type == 3))
+        return 3;
+    return 1;
+}
+
+static int PeakAmplitudeParameter(int peak, int multiplet_type, bool fix_multiplet_width) {
+    if (peak == 1)
+        return 3;
+    if (peak == 2)
+        return 6;
+    if (multiplet_type == 2)
+        return 6;
+    return fix_multiplet_width ? 8 : 9;
+}
+
+static int PeakPositionParameter(int peak, int multiplet_type, bool fix_multiplet_width) {
+    if (peak == 1)
+        return 4;
+    if (peak == 2)
+        return 7;
+    if (multiplet_type == 2)
+        return 7;
+    return fix_multiplet_width ? 9 : 10;
+}
+
+static int PeakWidthParameter(int peak, int multiplet_type, bool fix_multiplet_width) {
+    if (peak == 1 || fix_multiplet_width)
+        return 5;
+    if (peak == 2)
+        return 8;
+    if (multiplet_type == 2)
+        return 8;
+    return 11;
+}
+
 //background integration and filling of net integral vector
 void ShapeMatrix::IntegrateBg() {
     integral1Bg.clear();
@@ -189,6 +240,8 @@ void ShapeMatrix::FitIntegral(){
     fit_integral2Bg.clear();
     fit_integral1Net.clear();
     fit_integral2Net.clear();
+    fit_gamma1.clear();
+    fit_gamma2.clear();
    
     //normalization of integral to bin width: the integration of the fit result is in keV whereas the matrix is integrated by bins
     double integral_norm = diagEx->GetXaxis()->GetBinWidth(1);
@@ -200,6 +253,7 @@ void ShapeMatrix::FitIntegral(){
             fit_integral1.push_back(0);
             fit_integral1Bg.push_back(0);
             fit_integral1Net.push_back(0);
+            fit_gamma1.push_back(0);
             width1.push_back(0);
             allgamma1.push_back(0);
         }
@@ -213,18 +267,28 @@ void ShapeMatrix::FitIntegral(){
             FitGauss(projLevel1, i, 0);
             
             //integration
+            int multiplet_type = MultipletTypeForLevel(sett, 0);
+            bool fix_multiplet_width = ((multiplet_type == 1) || (multiplet_type == 3)) ? sett->fixDoubletWidth[0] :
+                                       (multiplet_type == 2) ? sett->fixTripletWidth[0] : true;
+            int gsfPeak = SelectedGsfPeakForLevel(sett, 0, multiplet_type);
+            int peakAmpIdx = PeakAmplitudeParameter(gsfPeak, multiplet_type, fix_multiplet_width);
+            int peakPosIdx = PeakPositionParameter(gsfPeak, multiplet_type, fix_multiplet_width);
+            // peak position is in diag_ene = E_x - E_gamma space; convert to true E_gamma
+            double fitGamma = (ene0 + (i + 0.5) * esize) - fit_result[0]->GetParameter(peakPosIdx);
             double integral_tot =fit_result[0]->Integral(sett->levEne[0], sett->levEne[1]) / integral_norm;
             
             fit_integral1.push_back(integral_tot);
-            //integral of background, only: setting amplitude of Gauss to zero
-            fit_result[0]->FixParameter(3,0);
+            //integral of background, only: setting selected peak amplitude of Gauss to zero
+            fit_result[0]->FixParameter(peakAmpIdx,0);
             double integral_bg =fit_result[0]->Integral(sett->levEne[0], sett->levEne[1]) / integral_norm;
             fit_integral1Bg.push_back(integral_bg);
             fit_integral1Net.push_back(integral_tot - integral_bg);
+            fit_gamma1.push_back(fitGamma);
             
             //store fit result and corresponding gamma ray energy
             if (fit_integral1Net[i] >= sett->minCounts) {
-                width1.push_back(TMath::Abs(fit_result[0]->GetParameter(5)));
+                int peakWidIdx = PeakWidthParameter(gsfPeak, multiplet_type, fix_multiplet_width);
+                width1.push_back(TMath::Abs(fit_result[0]->GetParameter(peakWidIdx)));
                 allgamma1.push_back(integral1Square[i] /integral1Cube[i]);
             }
             
@@ -242,6 +306,7 @@ void ShapeMatrix::FitIntegral(){
             fit_integral2.push_back(0);
             fit_integral2Bg.push_back(0);
             fit_integral2Net.push_back(0);
+            fit_gamma2.push_back(0);
             width2.push_back(0);
             allgamma2.push_back(0);
         }
@@ -251,17 +316,27 @@ void ShapeMatrix::FitIntegral(){
             FitGauss(projLevel2, i, 1);
             
             //integration
+            int multiplet_type = MultipletTypeForLevel(sett, 1);
+            bool fix_multiplet_width = ((multiplet_type == 1) || (multiplet_type == 3)) ? sett->fixDoubletWidth[1] :
+                                       (multiplet_type == 2) ? sett->fixTripletWidth[1] : true;
+            int gsfPeak = SelectedGsfPeakForLevel(sett, 1, multiplet_type);
+            int peakAmpIdx = PeakAmplitudeParameter(gsfPeak, multiplet_type, fix_multiplet_width);
+            int peakPosIdx = PeakPositionParameter(gsfPeak, multiplet_type, fix_multiplet_width);
+            // peak position is in diag_ene = E_x - E_gamma space; convert to true E_gamma
+            double fitGamma = (ene0 + (i + 0.5) * esize) - fit_result[1]->GetParameter(peakPosIdx);
             double integral_tot =fit_result[1]->Integral(sett->levEne[2], sett->levEne[3]) / integral_norm;
             fit_integral2.push_back(integral_tot);
-            //integral of background, only: setting amplitude of Gauss to zero
-            fit_result[1]->FixParameter(3,0);
+            //integral of background, only: setting selected peak amplitude of Gauss to zero
+            fit_result[1]->FixParameter(peakAmpIdx,0);
             double integral_bg =fit_result[1]->Integral(sett->levEne[2], sett->levEne[3]) / integral_norm;
             fit_integral2Bg.push_back(integral_bg);
             fit_integral2Net.push_back(integral_tot - integral_bg);
+            fit_gamma2.push_back(fitGamma);
             
             if (fit_integral2Net[i] >= sett->minCounts) {
                 //store fit result and corresponding gamma ray energy
-                width2.push_back(TMath::Abs(fit_result[1]->GetParameter(5)));
+                int peakWidIdx = PeakWidthParameter(gsfPeak, multiplet_type, fix_multiplet_width);
+                width2.push_back(TMath::Abs(fit_result[1]->GetParameter(peakWidIdx)));
                 allgamma2.push_back(integral2Square[i] /integral2Cube[i]);
             }
                 
@@ -537,15 +612,52 @@ void ShapeMatrix::FitGauss(TH1D *histo, int bin, int level) {
         histo->Fit(name,"RQ+","",bgRange[0],bgRange[3]);
     else
         histo->Fit(name,"RQ+","",bgRange[0],bgRange[3]);
-	
 
-	//set amplitude of doublet and triplet peaks to zero as we only want the peak content of the peak of interest
-	if (multiplet_type == 1 || multiplet_type == 3) 
-		fit_result[level]->FixParameter(6,0);
+    if (sett->verbose) {
+        double sqrt2pi = std::sqrt(2.0 * M_PI);
+        double sig1 = std::abs(fit_result[level]->GetParameter(5));
+        double vol1 = fit_result[level]->GetParameter(3) * sig1 * sqrt2pi;
+        std::cout << "FitGauss volumes: level=" << level << " bin=" << bin
+                  << " Peak1=" << vol1;
+        if (multiplet_type == 1 || multiplet_type == 3) {
+            double sig2 = fix_multiplet_width ? sig1 : std::abs(fit_result[level]->GetParameter(8));
+            double vol2 = fit_result[level]->GetParameter(6) * sig2 * sqrt2pi;
+            std::cout << " Peak2=" << vol2;
+        }
+        if (multiplet_type == 2 || multiplet_type == 3) {
+            int triplet_amp_idx = (multiplet_type == 2) ? 6 : (fix_multiplet_width ? 8 : 9);
+            double sig3;
+            if (fix_multiplet_width) {
+                sig3 = sig1;
+            } else if (multiplet_type == 2) {
+                sig3 = std::abs(fit_result[level]->GetParameter(8));
+            } else {
+                sig3 = std::abs(fit_result[level]->GetParameter(11));
+            }
+            double vol3 = fit_result[level]->GetParameter(triplet_amp_idx) * sig3 * sqrt2pi;
+            std::cout << " Peak3=" << vol3;
+        }
+        std::cout << std::endl;
+    }
+
+	// Zero the amplitudes of peaks that are NOT the selected gSF reference peak
+	int gsfPeak = sett->gsfPeakRef[level]; // 1=peak1, 2=peak2, 3=peak3
+		if ((gsfPeak == 2 && !(multiplet_type == 1 || multiplet_type == 3)) ||
+			(gsfPeak == 3 && !(multiplet_type == 2 || multiplet_type == 3)))
+			gsfPeak = 1;
+
+	if (gsfPeak != 1)
+		fit_result[level]->FixParameter(3, 0);  // zero Peak 1
+
+	if (multiplet_type == 1 || multiplet_type == 3) {
+		if (gsfPeak != 2)
+			fit_result[level]->FixParameter(6, 0);
+	}
 	if (multiplet_type == 2 || multiplet_type == 3) {
 		// Triplet amplitude: par[6] if triplet-only, par[8] if both (widths fixed), par[9] if both (widths free)
 		int triplet_amp_idx = (multiplet_type == 2) ? 6 : (fix_multiplet_width ? 8 : 9);
-		fit_result[level]->FixParameter(triplet_amp_idx,0);
+		if (gsfPeak != 3)
+			fit_result[level]->FixParameter(triplet_amp_idx, 0);
 	}
 }
 

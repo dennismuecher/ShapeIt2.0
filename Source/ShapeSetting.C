@@ -249,6 +249,8 @@ void ShapeSetting::SaveSettings() {
     outfile << "doTriplet2 " << doTriplet[1] <<"\n";
     outfile << "fixDoubletWidth2 " << fixDoubletWidth[1] <<"\n";
     outfile << "fixTripletWidth2 " << fixTripletWidth[1] <<"\n";
+    outfile << "gsfPeakRef1 " << gsfPeakRef[0] <<"\n";
+    outfile << "gsfPeakRef2 " << gsfPeakRef[1] <<"\n";
 	outfile << "excitation " << exiEne[0] <<" "<<exiEne[1] <<"\n";
     outfile << "excitationMCLimits " << exiEneMC[0] <<" "<<exiEneMC[1] <<"\n";
     outfile << "excitation_bin_1 " << exi_size[0] <<"\n";
@@ -376,6 +378,8 @@ void ShapeSetting::ReadSettings() {
             if (word == "doTriplet2" ) isstr >> doTriplet[1];
             if (word == "fixDoubletWidth2" ) isstr >> fixDoubletWidth[1];
             if (word == "fixTripletWidth2" ) isstr >> fixTripletWidth[1];
+            if (word == "gsfPeakRef1" ) isstr >> gsfPeakRef[0];
+            if (word == "gsfPeakRef2" ) isstr >> gsfPeakRef[1];
             if (word == "bg_level1" ){ isstr >> bgEne[0][0]; isstr >> bgEne[0][1]; isstr >> bgEne[0][2]; isstr >> bgEne[0][3];}
             if (word == "bg_level2" ){ isstr >> bgEne[1][0]; isstr >> bgEne[1][1]; isstr >> bgEne[1][2]; isstr >> bgEne[1][3];}
             if (word == "excitation" ) { isstr >> exiEne[0]; isstr >>exiEne[1];}

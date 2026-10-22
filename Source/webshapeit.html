@@ -147,7 +147,13 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 
           <!-- Peak 1 (always active) -->
           <div id="peak1L1-section" style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
-            <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 6px;">Peak 1</div>
+            <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+              <span>Peak 1</span>
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #555; cursor: pointer;">
+                <input type="radio" name="gsfPeakL1" id="gsfPeak1L1" value="1" checked style="margin: 0;">
+                use for gSF
+              </label>
+            </div>
             <div style="display: flex; flex-direction: column; gap: 4px;">
               <div style="display: flex; align-items: center; gap: 8px;">
                 <label style="font-size: 12px; margin: 0; width: 70px;">Position:</label>
@@ -163,9 +169,15 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 
           <!-- Peak 2 (toggleable) -->
           <div id="peak2L1-section" style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-              <input type="checkbox" id="enablePeak2L1" style="margin: 0;">
-              <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 2</div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="enablePeak2L1" style="margin: 0;">
+                <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 2</div>
+              </div>
+              <label id="gsfPeak2L1-label" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #999; cursor: not-allowed;">
+                <input type="radio" name="gsfPeakL1" id="gsfPeak2L1" value="2" style="margin: 0;" disabled>
+                use for gSF
+              </label>
             </div>
             <div id="peak2L1-fields" style="display: none;">
               <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -184,9 +196,15 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 
           <!-- Peak 3 (toggleable) -->
           <div id="peak3L1-section" style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-              <input type="checkbox" id="enablePeak3L1" style="margin: 0;">
-              <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 3</div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="enablePeak3L1" style="margin: 0;">
+                <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 3</div>
+              </div>
+              <label id="gsfPeak3L1-label" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #999; cursor: not-allowed;">
+                <input type="radio" name="gsfPeakL1" id="gsfPeak3L1" value="3" style="margin: 0;" disabled>
+                use for gSF
+              </label>
             </div>
             <div id="peak3L1-fields" style="display: none;">
               <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -221,7 +239,13 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 
           <!-- Peak 1 (always active) -->
           <div id="peak1L2-section" style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
-            <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 6px;">Peak 1</div>
+            <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+              <span>Peak 1</span>
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #555; cursor: pointer;">
+                <input type="radio" name="gsfPeakL2" id="gsfPeak1L2" value="1" checked style="margin: 0;">
+                use for gSF
+              </label>
+            </div>
             <div style="display: flex; flex-direction: column; gap: 4px;">
               <div style="display: flex; align-items: center; gap: 8px;">
                 <label style="font-size: 12px; margin: 0; width: 70px;">Position:</label>
@@ -237,9 +261,15 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 
           <!-- Peak 2 (toggleable) -->
           <div id="peak2L2-section" style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-              <input type="checkbox" id="enablePeak2L2" style="margin: 0;">
-              <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 2</div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="enablePeak2L2" style="margin: 0;">
+                <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 2</div>
+              </div>
+              <label id="gsfPeak2L2-label" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #999; cursor: not-allowed;">
+                <input type="radio" name="gsfPeakL2" id="gsfPeak2L2" value="2" style="margin: 0;" disabled>
+                use for gSF
+              </label>
             </div>
             <div id="peak2L2-fields" style="display: none;">
               <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -258,9 +288,15 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 
           <!-- Peak 3 (toggleable) -->
           <div id="peak3L2-section" style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-              <input type="checkbox" id="enablePeak3L2" style="margin: 0;">
-              <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 3</div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="enablePeak3L2" style="margin: 0;">
+                <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 3</div>
+              </div>
+              <label id="gsfPeak3L2-label" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #999; cursor: not-allowed;">
+                <input type="radio" name="gsfPeakL2" id="gsfPeak3L2" value="3" style="margin: 0;" disabled>
+                use for gSF
+              </label>
             </div>
             <div id="peak3L2-fields" style="display: none;">
               <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -1286,6 +1322,8 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           document.getElementById('peak3L1-fields').style.display = hasTriplet1 ? 'block' : 'none';
           document.getElementById('enablePeak3L2').checked = hasTriplet2;
           document.getElementById('peak3L2-fields').style.display = hasTriplet2 ? 'block' : 'none';
+          updateGsfPeakAvailability(1);
+          updateGsfPeakAvailability(2);
           
           document.getElementById('keepWidthsEqual1').checked = v[8] !== 0;
           document.getElementById('keepWidthsEqual2').checked = v[9] !== 0;
@@ -1401,6 +1439,16 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
             
             updateKeepWidthsEqualState(1);
             updateKeepWidthsEqualState(2);
+          }
+          
+          // Indices 57-58: gSF reference peak selection
+          if (v.length >= 59) {
+            const gsfL1 = sanitizeGsfPeakSelection(1, v[57] || 1);
+            const gsfL2 = sanitizeGsfPeakSelection(2, v[58] || 1);
+            const r1 = document.getElementById('gsfPeak' + gsfL1 + 'L1');
+            if (r1) r1.checked = true;
+            const r2 = document.getElementById('gsfPeak' + gsfL2 + 'L2');
+            if (r2) r2.checked = true;
           }
         }
         
@@ -1640,11 +1688,13 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
   // NEW: Enable/disable Peak 2 and Peak 3 for Level 1
   document.getElementById('enablePeak2L1').addEventListener('change', (e) => {
     document.getElementById('peak2L1-fields').style.display = e.target.checked ? 'block' : 'none';
+    updateGsfPeakAvailability(1);
     updateKeepWidthsEqualState(1);
     sendNewPeakConfig();
   });
   document.getElementById('enablePeak3L1').addEventListener('change', (e) => {
     document.getElementById('peak3L1-fields').style.display = e.target.checked ? 'block' : 'none';
+    updateGsfPeakAvailability(1);
     updateKeepWidthsEqualState(1);
     sendNewPeakConfig();
   });
@@ -1652,11 +1702,13 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
   // NEW: Enable/disable Peak 2 and Peak 3 for Level 2
   document.getElementById('enablePeak2L2').addEventListener('change', (e) => {
     document.getElementById('peak2L2-fields').style.display = e.target.checked ? 'block' : 'none';
+    updateGsfPeakAvailability(2);
     updateKeepWidthsEqualState(2);
     sendNewPeakConfig();
   });
   document.getElementById('enablePeak3L2').addEventListener('change', (e) => {
     document.getElementById('peak3L2-fields').style.display = e.target.checked ? 'block' : 'none';
+    updateGsfPeakAvailability(2);
     updateKeepWidthsEqualState(2);
     sendNewPeakConfig();
   });
@@ -1699,6 +1751,10 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
   document.getElementById('keepWidthsEqual1').addEventListener('change', () => sendNewPeakConfig());
   document.getElementById('keepWidthsEqual2').addEventListener('change', () => sendNewPeakConfig());
 
+  ['gsfPeak1L1', 'gsfPeak2L1', 'gsfPeak3L1', 'gsfPeak1L2', 'gsfPeak2L2', 'gsfPeak3L2'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => sendNewPeakConfig());
+  });
+
   // NEW: Send Peak 1 position updates to backend
   // Peak 1 is the main peak for each level (always active)
   // Maps to settings file: fixPeakPos[0-1], peakPos[0-1]
@@ -1737,6 +1793,8 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
     
     const keepWidths1 = document.getElementById('keepWidthsEqual1').checked ? 1 : 0;
     const keepWidths2 = document.getElementById('keepWidthsEqual2').checked ? 1 : 0;
+    const gsfPeakL1 = sanitizeGsfPeakSelection(1, parseInt(document.querySelector('input[name="gsfPeakL1"]:checked')?.value || '1'));
+    const gsfPeakL2 = sanitizeGsfPeakSelection(2, parseInt(document.querySelector('input[name="gsfPeakL2"]:checked')?.value || '1'));
     
     const msg = [
       enablePeak2L1, fixPeak2L1, peakPos2L1,
@@ -1744,7 +1802,8 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
       keepWidths1,
       enablePeak2L2, fixPeak2L2, peakPos2L2,
       enablePeak3L2, fixPeak3L2, peakPos3L2,
-      keepWidths2
+      keepWidths2,
+      gsfPeakL1, gsfPeakL2
     ].join('|');
     
     if (conn_handle) {
@@ -1764,6 +1823,26 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
     
     checkbox.disabled = !hasMultiplePeaks;
     label.style.color = hasMultiplePeaks ? '' : '#999';
+  }
+
+  function sanitizeGsfPeakSelection(level, requestedPeak) {
+    const peak = parseInt(requestedPeak, 10);
+    if (peak === 2 && document.getElementById('enablePeak2L' + level).checked) return 2;
+    if (peak === 3 && document.getElementById('enablePeak3L' + level).checked) return 3;
+    return 1;
+  }
+
+  function updateGsfPeakAvailability(level) {
+    [2, 3].forEach(peak => {
+      const radio = document.getElementById('gsfPeak' + peak + 'L' + level);
+      const label = document.getElementById('gsfPeak' + peak + 'L' + level + '-label');
+      const enabled = document.getElementById('enablePeak' + peak + 'L' + level).checked;
+      radio.disabled = !enabled;
+      if (!enabled && radio.checked)
+        document.getElementById('gsfPeak1L' + level).checked = true;
+      label.style.color = enabled ? '#555' : '#999';
+      label.style.cursor = enabled ? 'pointer' : 'not-allowed';
+    });
   }
 
   // Doublet toggles - removed, now using NEW peak configuration UI

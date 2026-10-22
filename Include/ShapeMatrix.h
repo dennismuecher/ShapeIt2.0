@@ -110,6 +110,8 @@ public:
     std::vector <double> fit_integral2Bg;           //integral values of background level2
     std::vector <double> fit_integral1Net;           //integral values of level1, background subtracted
     std::vector <double> fit_integral2Net;           //integral values of level2, background subtracted
+    std::vector <double> fit_gamma1;                 //fitted gamma energy for selected gSF peak, level 1
+    std::vector <double> fit_gamma2;                 //fitted gamma energy for selected gSF peak, level 2
     
     std::vector <double> integral1Square;           //integral values of level1 in diagExSquare
     std::vector <double> integral2Square;           //integral values of level2 in diagExSquare

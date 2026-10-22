@@ -10,6 +10,7 @@
 * along with this program. If not, see  http://www.gnu.org/licenses/.    *
 *************************************************************************/
 #include "../Include/ShapeCollector.h"
+#include <fstream>
 
 //constructor using setting file and a matrix
 ShapeCollector::ShapeCollector(ShapeSetting* t_sett, ShapeMatrix* t_matrix):m_sett(t_sett), m_matrix(t_matrix)
@@ -204,17 +205,12 @@ void ShapeCollector::Transform(double B_t, double alpha_t) {
 
 //normalizes all gSF iterations to each other
 void ShapeCollector::NormCollect() {
-    
     double norm_fac = 1;
-    
-    for (int i = 0; i < gSFCollector.size(); i++) {
-        
-        
+    for (int i = 0; i < (int)gSFCollector.size(); i++) {
         if (m_sett->doOslo && m_sett->doAutoScale)
             norm_fac = Norm(gSFCollector[i], litCollector);
         else
             norm_fac = Norm(gSFCollector[i], gSFCollector[0]);
-    
         gSFCollector[i]->Scale(norm_fac);
     }
     Merge();
@@ -237,21 +233,34 @@ TMultiGraph* ShapeCollector::getMultGraph() {
         multGraph->Add(litCollector->GetLevGraph(),"3");
     }
     
+    {
+        std::ofstream _dbg("/tmp/shapeit_debug.txt", std::ios::app);
+        _dbg << "=== getMultGraph() ===\n";
+        _dbg << "displaySingle=" << m_sett->displaySingle
+             << " displayAvg=" << m_sett->displayAvg
+             << " gSFCollector.size()=" << gSFCollector.size() << "\n";
+    }
+
     //add individual data points (middle layer)
     if (m_sett->displaySingle) {
         //add all the gSF data stored in the collector to the MultiGraph
-        for (int i = 0; i < gSFCollector.size(); i++) {
+        for (int i = 0; i < (int)gSFCollector.size(); i++) {
             multGraph->Add(gSFCollector[i]->GetLevGraph_1());
             multGraph->Add(gSFCollector[i]->GetLevGraph_2());
         }
     }
-    
+
     //add smoothed average graph last (top layer), styled in black
     if (m_sett->displayAvg) {
         Smooth(0);
         gSFGraphSmooth->SetMarkerColor(1);  // black
         gSFGraphSmooth->SetLineColor(1);    // black
         multGraph->Add(gSFGraphSmooth,"P");
+    }
+
+    {
+        std::ofstream _dbg("/tmp/shapeit_debug.txt", std::ios::app);
+        _dbg << "total graphs in multGraph=" << multGraph->GetListOfGraphs()->GetSize() << "\n";
     }
     return ( multGraph );
 }
@@ -267,6 +276,18 @@ void ShapeCollector::Merge() {
     
     gSFGraph->Merge(mArray);
     gSFGraph->Sort();
+
+    if (m_sett->verbose) {
+        std::cout << "Merge(): gSFCollector has " << gSFCollector.size() << " entries" << std::endl;
+        for (int i = 0; i < (int)gSFCollector.size(); i++)
+            std::cout << "  entry " << i << ": " << gSFCollector[i]->GetLevGraph()->GetN() << " points" << std::endl;
+        std::cout << "Merge(): gSFGraph has " << gSFGraph->GetN() << " points after merge" << std::endl;
+        for (int i = 0; i < gSFGraph->GetN(); i++)
+            std::cout << "  gSFGraph[" << i << "]: E=" << gSFGraph->GetX()[i]
+                      << " gSF=" << gSFGraph->GetY()[i]
+                      << " err=" << gSFGraph->GetEY()[i] << std::endl;
+    }
+
     if (m_sett->displayAvg)
         Smooth(0);
 

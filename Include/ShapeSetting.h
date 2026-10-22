@@ -88,6 +88,7 @@ public:
     double doubletPeakPos[2] = {0, 0};      //fixed doublet peak position in keV for level 1 and 2
     bool fixTripletPeakPos[2] = {false, false};  //if true, fix triplet peak position in autofit for level 1/2
     double tripletPeakPos[2] = {0, 0};      //fixed triplet peak position in keV for level 1 and 2
+    int gsfPeakRef[2] = {1, 1};            //which peak to use for gSF calculation: 1=peak1, 2=peak2, 3=peak3
     int nOfBins = 1;
     double eff_corr = 1;					//correction factor for level 2;
     int minCounts = 0;                      //minimum number of counts required in a bin to be considered

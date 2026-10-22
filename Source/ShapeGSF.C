@@ -182,11 +182,20 @@ void ShapeGSF::FillgSF() {
 
     for (int i = 0; i < m_matrix->integral1Cube.size(); i++ ) {
 
+        double selectedCounts1 = getBgRatio(i, 1) * m_matrix->integral1[i];
+        double selectedCounts2 = getBgRatio(i, 2) * m_matrix->integral2[i];
+        if (m_sett->mode == 2 && m_sett->doBackground) {
+            selectedCounts1 = m_matrix->fit_integral1Net[i];
+            selectedCounts2 = m_matrix->fit_integral2Net[i];
+        }
+        else if (m_sett->mode == 2) {
+            selectedCounts1 = m_matrix->fit_integral1[i];
+            selectedCounts2 = m_matrix->fit_integral2[i];
+        }
+
         //if any of the two peak areas is below minCounts, skip this entire gSF pair
-        if ( getBgRatio(i, 1) * m_matrix->integral1[i] < m_sett->minCounts ||
-             getBgRatio(i, 2) * m_matrix->integral2[i] < m_sett->minCounts ||
-             getBgRatio(i, 1) * m_matrix->integral1[i] <= 0 ||
-             getBgRatio(i, 2) * m_matrix->integral2[i] <= 0 )
+        if (selectedCounts1 < m_sett->minCounts || selectedCounts2 < m_sett->minCounts ||
+            selectedCounts1 <= 0 || selectedCounts2 <= 0)
             continue;
 
         //calculating the average E_g, weighted by gSF, i.e. egamma_avg = SUM (E_g*gSF) / SUM(gSF). E_g*gSF is contained in the gSFSquare matrix
@@ -203,21 +212,35 @@ void ShapeGSF::FillgSF() {
         //recalculate gSF in case autofit is activated
         
         if (m_sett->mode == 2 && m_sett->doBackground) {
-            gSF1 = m_sett->getEffCor(egamma1, 1) * m_matrix->fit_integral1Net[i] * m_matrix->integral1Cube[i]  / m_matrix->integral1[i];
-            
-            gSF2 = m_sett->getEffCor(egamma2, 2) * m_matrix->fit_integral2Net[i] * m_matrix->integral2Cube[i] / m_matrix->integral2[i];
-                
+            egamma1 = m_matrix->fit_gamma1[i];
+            egamma2 = m_matrix->fit_gamma2[i];
+            if (egamma1 <= 0 || egamma2 <= 0)
+                continue;
+
+            gSF1 = m_sett->getEffCor(egamma1, 1) * m_matrix->fit_integral1Net[i] / TMath::Power(egamma1, 3);
+            dgSF1 = TMath::Power(1./m_matrix->fit_integral1Net[i], 0.5) * gSF1;
+
+            gSF2 = m_sett->getEffCor(egamma2, 2) * m_matrix->fit_integral2Net[i] / TMath::Power(egamma2, 3);
+            dgSF2 = TMath::Power(1./m_matrix->fit_integral2Net[i], 0.5) * gSF2;
+
             if (m_matrix->fit_integral1Net[i] < 0 || m_matrix->fit_integral2Net[i] < 0) {
-                    std::cout <<"Fit result smaller than zero, skipping this event" <<std::endl;
+                std::cout <<"Fit result smaller than zero, skipping this event" <<std::endl;
                 continue;
             }
         }
         //autofit without background
         else if( m_sett->mode == 2 && !m_sett->doBackground) {
-            gSF1 = m_sett->getEffCor(egamma1, 1) * m_matrix->fit_integral1[i] * m_matrix->integral1Cube[i]  / m_matrix->integral1[i];
-            
-            gSF2 = m_sett->getEffCor(egamma2, 2) * m_matrix->fit_integral2[i] * m_matrix->integral2Cube[i]  / m_matrix->integral2[i];
-            
+            egamma1 = m_matrix->fit_gamma1[i];
+            egamma2 = m_matrix->fit_gamma2[i];
+            if (egamma1 <= 0 || egamma2 <= 0)
+                continue;
+
+            gSF1 = m_sett->getEffCor(egamma1, 1) * m_matrix->fit_integral1[i] / TMath::Power(egamma1, 3);
+            dgSF1 = TMath::Power(1./m_matrix->fit_integral1[i], 0.5) * gSF1;
+
+            gSF2 = m_sett->getEffCor(egamma2, 2) * m_matrix->fit_integral2[i] / TMath::Power(egamma2, 3);
+            dgSF2 = TMath::Power(1./m_matrix->fit_integral2[i], 0.5) * gSF2;
+
             if (m_matrix->fit_integral1[i] < 0 || m_matrix->fit_integral2[i] < 0) {
                 std::cout <<"Fit result smaller than zero, skipping this event" <<std::endl;
                 continue;
