@@ -1518,11 +1518,43 @@ void RunShapeIt(unsigned connid)
             hist->GetYaxis()->SetTitleOffset(1.2);
             // Also set the graph's own title as a fallback
             firstGraph->SetTitle("Gamma Ray Strength Function from Shape Method");
+            // Set x-axis to cover all drawn graphs, not just the first one drawn with "A"
+            {
+                double xmin = 1e99, xmax = -1e99;
+                for (auto &fg : freshGraphs) {
+                    double gxmin, gxmax, gymin, gymax;
+                    fg.graph->ComputeRange(gxmin, gymin, gxmax, gymax);
+                    xmin = std::min(xmin, gxmin);
+                    xmax = std::max(xmax, gxmax);
+                }
+                if (xmin < xmax) {
+                    double xrange = xmax - xmin;
+                    firstGraph->GetXaxis()->SetLimits(xmin - 0.05*xrange, xmax + 0.05*xrange);
+                }
+            }
+            // Set y-axis to cover all drawn graphs including error bars, with a comfortable margin
+            {
+                double ymin = 1e99, ymax = -1e99;
+                for (auto &fg : freshGraphs) {
+                    double gxmin, gxmax, gymin, gymax;
+                    fg.graph->ComputeRange(gxmin, gymin, gxmax, gymax);
+                    ymin = std::min(ymin, gymin);
+                    ymax = std::max(ymax, gymax);
+                }
+                if (ymin < ymax) {
+                    TH1F *hist = firstGraph->GetHistogram();
+                    if (hist) {
+                        hist->SetMaximum(ymax * 1.3);
+                        if (ymin > 0)
+                            hist->SetMinimum(ymin * 0.7);
+                    }
+                }
+            }
             gPad->Modified();  // Mark pad as modified after changing labels
         } else {
         }
     }
-    
+
     // Add chi2 and alpha text box if Oslo data is displayed (matches ShapeFrame::getPaveTextgSF())
     if (sett->doOslo) {
         TPaveText *t = new TPaveText(0.8, 0.85, 0.95, 0.95, "brNDC");
@@ -3249,13 +3281,15 @@ void ProcessData(unsigned connid, const std::string &arg)
                     hist->GetXaxis()->SetTitleOffset(1.0);
                     hist->GetYaxis()->SetTitleOffset(1.2);
                     
-                    // Set Y-axis range based on actual data with proper padding
-                    // For lower bound, use larger of absolute padding or zero (avoid negative on log scale)
-                    double yrange = ymax - ymin;
-                    double yminPadded = ymin - 0.1*yrange;  // 10% padding below
-                    if (yminPadded < 0 || ymin <= 0) yminPadded = ymin * 0.5;  // For log scale, use 50% of min
-                    hist->SetMinimum(yminPadded);
-                    hist->SetMaximum(ymax * 1.1);  // 10% above max
+                    // Set x-axis to cover all drawn graphs, not just the first one drawn with "A"
+                    if (xmin < xmax) {
+                        double xrange = xmax - xmin;
+                        firstGraph->GetXaxis()->SetLimits(xmin - 0.05*xrange, xmax + 0.05*xrange);
+                    }
+                    // Set Y-axis range to cover all data including error bars, with a comfortable margin
+                    if (ymin > 0)
+                        hist->SetMinimum(ymin * 0.7);
+                    hist->SetMaximum(ymax * 1.3);
                     
                     // Don't change log scale - preserve whatever the user had set
                     gPad->Modified();
@@ -3405,10 +3439,39 @@ void ProcessData(unsigned connid, const std::string &arg)
                 hist->GetXaxis()->SetTitleOffset(1.0);
                 hist->GetYaxis()->SetTitleOffset(1.2);
                 firstGraph->SetTitle("Gamma Ray Strength Function from Shape Method");
+                // Set x-axis to cover all drawn graphs, not just the first one drawn with "A"
+                {
+                    double xmin = 1e99, xmax = -1e99;
+                    for (auto &fg : freshGraphs) {
+                        double gxmin, gxmax, gymin, gymax;
+                        fg.graph->ComputeRange(gxmin, gymin, gxmax, gymax);
+                        xmin = std::min(xmin, gxmin);
+                        xmax = std::max(xmax, gxmax);
+                    }
+                    if (xmin < xmax) {
+                        double xrange = xmax - xmin;
+                        firstGraph->GetXaxis()->SetLimits(xmin - 0.05*xrange, xmax + 0.05*xrange);
+                    }
+                }
+                // Set y-axis to cover all drawn graphs including error bars, with a comfortable margin
+                {
+                    double ymin = 1e99, ymax = -1e99;
+                    for (auto &fg : freshGraphs) {
+                        double gxmin, gxmax, gymin, gymax;
+                        fg.graph->ComputeRange(gxmin, gymin, gxmax, gymax);
+                        ymin = std::min(ymin, gymin);
+                        ymax = std::max(ymax, gymax);
+                    }
+                    if (ymin < ymax) {
+                        hist->SetMaximum(ymax * 1.3);
+                        if (ymin > 0)
+                            hist->SetMinimum(ymin * 0.7);
+                    }
+                }
                 gPad->Modified();
             }
         }
-        
+
         // Add chi2 and alpha text box if Oslo data is displayed
         if (sett->doOslo) {
             TPaveText *t = new TPaveText(0.8, 0.85, 0.95, 0.95, "brNDC");
