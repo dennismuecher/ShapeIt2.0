@@ -91,25 +91,47 @@ both curves change from iteration to iteration. The display refreshes every
 
 *Four-panel Monte Carlo summary for* `88Kr`*. Top left: χ² vs Δα for all
 iterations. Top right: Ex_low vs Δα scatter. Bottom left: histogram of
-best-fit Δα values — the best-fit is 0.060 MeV$^{-1}$. Bottom right:
-distribution of best-fit Ex_low values.*
+best-fit Δα values — the label "Best: 0.060" marks the single iteration
+with the lowest χ², but the centroid of the distribution (here around
+−0.05) is the more reliable estimate. Bottom right: distribution of
+randomly drawn Ex_low values.*
 
 On completion (or after pressing **Stop**), ShapeIt shows a four-panel
 summary in the canvas:
 
-- **χ² vs α** — the χ² landscape from the scan, showing the best-fit
-  minimum.
-- **Ex_low vs α** — how the best-fit slope varies with the randomly drawn
-  lower excitation-energy edge.
-- **Histogram of best-fit α values** — the distribution of recorded slopes
-  across all iterations.
-- **Summary statistics** — the mean $\delta\alpha$ and its 1σ standard
-  deviation.
+- **χ² vs Δα** — the χ² landscape across all iterations, showing the
+  single iteration with the lowest χ².
+- **Ex_low vs Δα** — how the best-fit slope varies with the randomly drawn
+  lower excitation-energy edge, giving a sense of the sensitivity to that
+  choice.
+- **Δα distribution** — histogram of the best-fit Δα recorded in each
+  iteration.
+- **Ex_low distribution** — histogram of the randomly drawn lower
+  excitation-energy values across all iterations.
 
-The accumulated best-fit $\alpha$ values form a distribution that is close
-to Gaussian. Its **mean** is the slope correction $\delta\alpha$ relative to
-the literature normalization, and its **standard deviation** is the
-corresponding 1σ uncertainty.
+## Choosing your slope correction value
+
+The four-panel summary labels each histogram with the value from the
+**single iteration that achieved the lowest χ²** (shown as "Best: ..." in
+the histogram title). This is *not* necessarily the best value to use.
+
+A single iteration with a slightly lower χ² may simply have drawn a
+favourable random combination of bin width, Ex_low, and peak areas —
+it doesn't mean that Δα is physically more likely to be correct. The
+**centroid of the Δα distribution** (bottom-left panel) is a more robust
+estimate: it reflects where the *majority* of iterations converge, averaging
+out the random draws rather than picking the luckiest one.
+
+!!! tip "Use the distribution centroid, not the χ² minimum"
+    Read the centroid of the Δα histogram as your best estimate of the
+    slope correction. The spread (standard deviation) of the distribution
+    is your 1σ uncertainty. The χ² minimum shown in the panel title is a
+    useful sanity check but should not be used directly as the slope
+    correction value.
+
+To apply your chosen Δα, type it into the **Slope Δα** field at the top of
+the Slope Correction panel and press Enter — the overlaid literature curve
+updates immediately so you can see the effect on the gSF plot.
 
 ## Getting to the absolute partial level density
 

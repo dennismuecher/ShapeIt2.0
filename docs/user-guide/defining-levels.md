@@ -81,15 +81,34 @@ sections:
 1. Check the checkbox next to **Peak 2** (or **Peak 3**) to enable it.
 2. A **Position** field and **Fix position** checkbox appear — set the
    expected centre of the contaminant peak.
-3. The **use for gSF** radio button selects *which* peak's integrated area
-   is used to compute the γSF ratio $R$ — normally Peak 1 (the main level),
-   but you can select Peak 2 or Peak 3 if the main physical transition is
-   actually the second or third fitted component.
 
 When multiple peaks are active, the widths of all components within a fit
 region are **kept equal** (shown by the greyed-out "Keep widths equal"
 label below each level's peak sections — this constraint is always on when
 more than one peak is active).
+
+### Selecting the active peak for gSF
+
+This is a key new feature in ShapeIt 2.0. Each peak section has a
+**use for gSF** radio button. This controls *which* peak's integrated area
+enters the γSF ratio $R$ — only one peak per level can be active at a time.
+
+The default is always Peak 1. You would switch to Peak 2 or Peak 3 when the
+physical level of interest is not the strongest peak in the fit window — for
+example:
+
+- Your level of interest is actually the **second-strongest** peak in the
+  fit region, and you added a contaminant (Peak 1) to model a nearby line
+  that is accidentally larger.
+- You are fitting a **doublet where the second component is the level you
+  want** — e.g. the physical $2^+$ transition sits right next to a strong
+  escape peak, and you placed the escape peak as Peak 1 to keep it
+  well-constrained, with the true level as Peak 2.
+
+!!! note
+    The "use for gSF" radio button for Peak 2 and Peak 3 is only enabled
+    once that peak is activated by its checkbox. Peak 1's radio button is
+    always available and is selected by default.
 
 ## Markers on the projection plot
 

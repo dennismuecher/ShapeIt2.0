@@ -47,33 +47,65 @@ diagnosing unexpected results.
 
 ## Width calibration
 
-Run ShapeIt once in **Autofit** mode with the width left free: for every
-excitation-energy bin, the Gaussian fit determines a peak width for Level 1
-and Level 2 independently. Open **Display → Width calibration...** to view
-the Width Calibration panel, which shows the linear fit
+The width calibration workflow has a few non-obvious steps. Follow the
+sequence below carefully.
+
+### Step 1 — collect free-fit widths
+
+Make sure **Use width calibration** is **unchecked** in the Options tab,
+then press **ShapeIt!** in **Autofit** mode. With the option off, every
+bin's Gaussian fit determines its own peak width freely — these are the raw
+width measurements the calibration is derived from.
+
+!!! warning "Use width calibration must be off for this step"
+    If **Use width calibration** is still checked when you press ShapeIt!,
+    the run will use the *existing* calibration to constrain the widths, so
+    you get back the calibrated widths, not independent measurements. The
+    calibration panel will then show the same data as before rather than
+    fresh results. Always uncheck the option before collecting new data.
+
+### Step 2 — open the Width Calibration panel and fit
+
+Open **Display → Width calibration...**. The panel shows the raw width
+data from the last free-fit run, and the current linear calibration
+parameters (offset and slope) for Level 1 and Level 2.
+
+Click **Refresh Fits from Data** to fit those raw widths with the linear
+model
 
 $$
 \sigma(E_\gamma) = \text{offset} + \text{slope} \times E_\gamma
 $$
 
-through the fitted widths for each level. Click **Refresh Fits from Data**
-to refit using the widths from the most recent run.
+The offset and slope fields update to show the fit result. Inspect the
+plot to make sure the fits look reasonable across the full γ-ray energy
+range.
 
 ![Peak widths from Autofit, with linear calibration fits](../images/screenshots/width_calibration.png){ width="80%" }
 
 *Peak widths vs. γ-ray energy for Level 1 (red circles) and Level 2 (blue
-squares), each with its own linear fit — the calibration
-$\sigma(E_\gamma) = \text{offset} + \text{slope} \times E_\gamma$. Here Level
-1 has offset 22.4 keV and near-zero slope; Level 2 has offset 40.9 keV and a
-slightly negative slope.*
+squares), each with its own linear fit. Here Level 1 has offset 22.4 keV
+and near-zero slope; Level 2 has offset 40.9 keV and a slightly negative
+slope.*
 
-Once a calibration exists, checking **Use width calibration** in the Options
-tab makes every subsequent fit use the calibrated width (evaluated at that
-bin's γ-ray energy) instead of fitting the width freely. This often gives
-more stable results in bins with low statistics or complicated backgrounds.
+You can also edit the offset and slope fields by hand if you prefer to set
+the calibration manually rather than fitting from data.
 
-The **Width Calibration** panel also lets you edit the offset and slope
-directly if you prefer to set them by hand rather than deriving them from
-data.
+### Step 3 — activate the calibration
+
+Go to the **Options** tab and check **Use width calibration**. All
+subsequent ShapeIt! runs will now constrain each bin's peak width to the
+calibrated value $\sigma(E_\gamma)$ evaluated at that bin's γ-ray energy,
+instead of fitting the width freely. This typically gives more stable fits
+in bins with low statistics or complicated backgrounds.
+
+### Updating an existing calibration
+
+To redo the calibration from scratch:
+
+1. **Uncheck Use width calibration** in the Options tab.
+2. Press **ShapeIt!** — this collects fresh free-fit width data (step 1 above).
+3. Open **Display → Width calibration...** and press **Refresh Fits from Data**.
+4. Check the new fits, then re-enable **Use width calibration**.
 
 Next: [Running ShapeIt and reading results](running-and-results.md).

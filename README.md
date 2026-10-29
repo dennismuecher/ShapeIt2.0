@@ -10,6 +10,6 @@ To run ShapeIt 2.0, change to the `ShapeIt2.0/` directory and say `root WebShape
 
 The documentation of ShapeIt 2.0 is here: https://dennismuecher.github.io/ShapeIt2.0/
 
-Currently, ShapeIt 2.0 is tested using ROOT 6.34 under macOS 14.5 (Sonoma). Please report any bugs or incompatibilities with different operating systems or ROOT versions, thank you!
+Currently, ShapeIt 2.0 is tested using ROOT 6.40.02 under macOS 14.5 (Sonoma). Please report any bugs or incompatibilities with different operating systems or ROOT versions, thank you!
 
 Dennis

@@ -23,11 +23,21 @@ indicator: an asterisk (*) means there are unsaved changes.
 
 ## Upgrading ShapeIt 1.0 settings files
 
-ShapeIt 2.0 can open settings files created by ShapeIt 1.0. The first time
-you open a 1.0 file, a dialog offers to upgrade it to the 2.0 format
-(which adds the new fields for peak positions, triplet peaks, display
-options, etc.). The original file is left unchanged; a new file is saved at
-the path you choose.
+ShapeIt 2.0 can open settings files created by ShapeIt 1.0. The older format
+is detected automatically (1.0 files have no `#` comment header). The new
+2.0-only fields are filled in with sensible defaults:
+
+- **Peak positions** (`peakPos1`, `peakPos2`, etc.) — estimated as the
+  midpoint of each level's fit window. Review and adjust these in the
+  **Levels** tab before running.
+- **Active peak for gSF** (`gsfPeakRef`) — defaults to Peak 1 for both
+  levels.
+- **Doublet / triplet peaks** — disabled by default.
+
+!!! tip
+    After loading a 1.0 file, use **Settings → Save settings as...** to
+    save a copy in 2.0 format before making any changes — this preserves
+    the original and gives you a clean 2.0 starting point.
 
 ## File format
 
