@@ -4,3 +4,11 @@
 *.o
 *_ACLiC_*
 *.xcodeproj
+
+# Private data directories
+88Kr/
+148La/
+126Ag/
+
+# macOS
+.DS_Store
