@@ -36,6 +36,7 @@ nav:
       - "4. Options and sewing": user-guide/options-and-sewing.md
       - "5. Running ShapeIt and reading results": user-guide/running-and-results.md
       - "6. Monte Carlo uncertainty and absolute level density": user-guide/monte-carlo-uncertainty.md
+      - "7. Viewing the level density": user-guide/level-density-display.md
   - The algorithm: algorithm.md
   - Settings files: settings-files.md
   - API Reference: api.md

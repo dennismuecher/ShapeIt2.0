@@ -142,8 +142,6 @@ low-energy normalization still anchored to known discrete levels, as usual)
 to obtain the absolute partial level density — now fixed without reference
 to a level-density model.
 
-Use **Display → Show level density...** to inspect the extracted level
-density and **Settings → Load NLD literature (Oslo) data...** to overlay a
-comparison (e.g. a TALYS-based level-density model) or
-**Settings → Load discrete levels data...** to overlay the known discrete
-level scheme at low excitation energy.
+The full details of the level density view — how to set Δα and its
+uncertainty, the error band calculation, and the discrete-levels overlay —
+are covered in [Viewing the level density](level-density-display.md).

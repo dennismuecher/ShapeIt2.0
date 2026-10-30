@@ -79,8 +79,7 @@ Once a run has completed, these become available under **Display**:
 | Menu item | Shows |
 |---|---|
 | **Width calibration...** | Peak widths from Autofit mode and their linear calibration — see [width calibration](options-and-sewing.md#width-calibration) |
-| **Show level density...** | The extracted level density $\rho(E_x)$ |
-| **Show discrete levels...** | Discrete level scheme overlaid on the level density (if a discrete level file is loaded) |
+| **Show level density...** | Plots the level density and opens the **Level Density Display** panel — see [Viewing the level density](level-density-display.md) |
 | **Show gSF results...** | A numeric table of $E_\gamma$, gSF, and uncertainty |
 | **Show settings file...** | The current settings as they would be written to a `.dat` file |
 
