@@ -631,11 +631,33 @@ struct MCState {
 
 MCState *gMCState = nullptr;
 
+// Import-mode Monte Carlo: perturbs each imported data point by its error bar,
+// then finds the alpha that minimises chi² against the Oslo literature for each
+// randomised realisation, building up an alpha uncertainty distribution.
+struct MCImportState {
+    int currentIter;
+    int totalIters;
+    std::vector<double> bestAlphas;
+    std::vector<double> bestChi2s;
+    TRandom3 rng;
+    unsigned connid;
+    bool stopRequested;
+    // Unperturbed import data (only points with Oslo coverage and non-zero errors)
+    std::vector<double> impX, impY, impEY;
+    // Raw Oslo values interpolated at each import energy (B=1, alpha=0)
+    std::vector<double> osloAtImpX;
+    // Alpha scan range (taken from sett->alphaLimit at start)
+    double alphaMin, alphaMax;
+};
+
+MCImportState *gMCImportState = nullptr;
+
 // Forward declarations
 void RunShapeIt(unsigned connid);
 void RunWidthCalibration(unsigned connid);
 void RunMonteCarlo(unsigned connid, int nIterations, double exiLowMin, double exiLowMax);
 void MCTimerCallback();
+void MCImportTimerCallback();
 
 // Timer callback for Monte Carlo iterations - runs ONE iteration at a time with live display
 void MCTimerCallback()
@@ -849,6 +871,175 @@ void MCTimerCallback()
     PushCanvasUpdate();
 }
 
+// Import-mode MC timer callback: one iteration per tick.
+void MCImportTimerCallback()
+{
+    if (!gMCImportState || gMCImportState->currentIter >= gMCImportState->totalIters
+        || gMCImportState->stopRequested) {
+        if (gMCImportState) {
+            if (gMCImportState->bestAlphas.empty()) {
+                window->Send(gMCImportState->connid, "MC_STOPPED:No iterations completed before stop.");
+                delete gMCImportState; gMCImportState = nullptr;
+                return;
+            }
+
+            int nRes = (int)gMCImportState->bestAlphas.size();
+
+            // Mean and std dev of alpha distribution
+            double sum = 0, sum2 = 0;
+            for (double a : gMCImportState->bestAlphas) { sum += a; sum2 += a*a; }
+            double meanAlpha = sum / nRes;
+            double stdAlpha  = std::sqrt(std::max(0.0, sum2/nRes - meanAlpha*meanAlpha));
+            double minChi2   = *std::min_element(gMCImportState->bestChi2s.begin(),
+                                                  gMCImportState->bestChi2s.end());
+
+            // 2x2 final display
+            canvas->cd();
+            canvas->Clear();
+            canvas->Divide(2, 2);
+
+            // Top-left: chi²/n vs alpha scatter
+            canvas->cd(1);
+            {
+                TGraph *g = new TGraph(nRes,
+                    gMCImportState->bestAlphas.data(),
+                    gMCImportState->bestChi2s.data());
+                g->SetTitle("#chi^{2}/n vs #Delta#alpha;#Delta#alpha [MeV^{-1}];#chi^{2}/n");
+                g->SetMarkerStyle(20); g->SetMarkerSize(0.8); g->SetMarkerColor(kBlue);
+                g->Draw("AP");
+            }
+
+            // Top-right: alpha vs iteration number (convergence check)
+            canvas->cd(2);
+            {
+                std::vector<double> iters(nRes);
+                for (int i = 0; i < nRes; i++) iters[i] = i + 1;
+                TGraph *g = new TGraph(nRes, iters.data(),
+                                       gMCImportState->bestAlphas.data());
+                g->SetTitle("#Delta#alpha per Iteration;Iteration;#Delta#alpha [MeV^{-1}]");
+                g->SetMarkerStyle(20); g->SetMarkerSize(0.8); g->SetMarkerColor(kRed);
+                g->Draw("AP");
+                TLine *ml = new TLine(1, meanAlpha, nRes, meanAlpha);
+                ml->SetLineColor(kBlue); ml->SetLineWidth(2); ml->Draw();
+            }
+
+            // Bottom-left: alpha distribution (main result)
+            canvas->cd(3);
+            {
+                double aMin = *std::min_element(gMCImportState->bestAlphas.begin(),
+                                                 gMCImportState->bestAlphas.end());
+                double aMax = *std::max_element(gMCImportState->bestAlphas.begin(),
+                                                 gMCImportState->bestAlphas.end());
+                int nBins = std::max(10, (int)std::sqrt(nRes));
+                TH1D *h = new TH1D("hMCImpAlpha",
+                    Form("#Delta#alpha (mean=%.3f, #sigma=%.3f);#Delta#alpha [MeV^{-1}];Counts",
+                         meanAlpha, stdAlpha),
+                    nBins, aMin - 0.1*(aMax-aMin), aMax + 0.1*(aMax-aMin));
+                for (double a : gMCImportState->bestAlphas) h->Fill(a);
+                h->SetLineColor(kBlue); h->SetLineWidth(2); h->Draw();
+                TLine *ml = new TLine(meanAlpha, 0, meanAlpha, h->GetMaximum());
+                ml->SetLineColor(kRed); ml->SetLineWidth(2); ml->Draw();
+            }
+
+            // Bottom-right: chi²/n distribution
+            canvas->cd(4);
+            {
+                double cMin = *std::min_element(gMCImportState->bestChi2s.begin(),
+                                                 gMCImportState->bestChi2s.end());
+                double cMax = *std::max_element(gMCImportState->bestChi2s.begin(),
+                                                 gMCImportState->bestChi2s.end());
+                int nBins = std::max(10, (int)std::sqrt(nRes));
+                TH1D *h = new TH1D("hMCImpChi2",
+                    Form("#chi^{2}/n (min=%.2f);#chi^{2}/n;Counts", minChi2),
+                    nBins, cMin - 0.1*(cMax-cMin), cMax + 0.1*(cMax-cMin));
+                for (double c : gMCImportState->bestChi2s) h->Fill(c);
+                h->SetLineColor(kRed); h->SetLineWidth(2); h->Draw();
+            }
+
+            canvas->cd();
+            gPad->Modified();
+            PushCanvasUpdate();
+
+            // Reuse MC_RESULT format: mean alpha | min chi2 | std alpha | iters done | total
+            std::string msg = "MC_RESULT:" + std::to_string(meanAlpha) + "|"
+                            + std::to_string(minChi2)   + "|"
+                            + std::to_string(stdAlpha)  + "|"
+                            + std::to_string(gMCImportState->currentIter) + "|"
+                            + std::to_string(gMCImportState->totalIters);
+            window->Send(gMCImportState->connid, msg);
+            delete gMCImportState; gMCImportState = nullptr;
+        }
+        return;
+    }
+
+    // ---- ONE iteration ----
+    int n = (int)gMCImportState->impX.size();
+
+    // Perturb each import point by its error bar
+    std::vector<double> yPert(n);
+    for (int i = 0; i < n; i++)
+        yPert[i] = gMCImportState->rng.Gaus(gMCImportState->impY[i],
+                                             gMCImportState->impEY[i]);
+
+    // Scan alpha; for each candidate, find optimal B analytically, then chi²
+    const int nSteps = 200;
+    double bestAlpha = gMCImportState->alphaMin;
+    double bestChi2  = 1e30;
+
+    for (int k = 0; k <= nSteps; k++) {
+        double alpha = gMCImportState->alphaMin
+                     + k * (gMCImportState->alphaMax - gMCImportState->alphaMin) / nSteps;
+
+        double sumNum = 0, sumDen = 0;
+        int nOvlp = 0;
+        for (int i = 0; i < n; i++) {
+            double o0 = gMCImportState->osloAtImpX[i];
+            if (o0 <= 0) continue;
+            double sigma = gMCImportState->impEY[i];
+            if (sigma <= 0) continue;
+            double oA = o0 * TMath::Exp(alpha * gMCImportState->impX[i] / 1000.0);
+            sumNum += yPert[i] * oA / (sigma * sigma);
+            sumDen += oA * oA  / (sigma * sigma);
+            nOvlp++;
+        }
+        if (nOvlp < 2 || sumDen <= 0) continue;
+        double B_opt = sumNum / sumDen;
+        if (B_opt <= 0) continue;
+
+        double chi2 = 0;
+        for (int i = 0; i < n; i++) {
+            double o0 = gMCImportState->osloAtImpX[i];
+            if (o0 <= 0) continue;
+            double sigma = gMCImportState->impEY[i];
+            if (sigma <= 0) continue;
+            double oFit = B_opt * o0 * TMath::Exp(alpha * gMCImportState->impX[i] / 1000.0);
+            double diff = (yPert[i] - oFit) / sigma;
+            chi2 += diff * diff;
+        }
+        chi2 /= nOvlp;
+
+        if (chi2 < bestChi2) { bestChi2 = chi2; bestAlpha = alpha; }
+    }
+
+    gMCImportState->bestAlphas.push_back(bestAlpha);
+    gMCImportState->bestChi2s.push_back(bestChi2);
+    gMCImportState->currentIter++;
+
+    // Live update: alpha scatter as it builds up
+    canvas->cd();
+    int nSoFar = (int)gMCImportState->bestAlphas.size();
+    std::vector<double> iters(nSoFar);
+    for (int i = 0; i < nSoFar; i++) iters[i] = i + 1;
+    TGraph *gLive = new TGraph(nSoFar, iters.data(),
+                                gMCImportState->bestAlphas.data());
+    gLive->SetTitle(Form("MC Import %d/%d;Iteration;Best #Delta#alpha [MeV^{-1}]",
+                         gMCImportState->currentIter, gMCImportState->totalIters));
+    gLive->SetMarkerStyle(20); gLive->SetMarkerSize(0.8); gLive->SetMarkerColor(kBlue);
+    gLive->Draw("AP");
+    gPad->Modified();
+    PushCanvasUpdate();
+}
+
 // Monte Carlo to find best alpha: runs multiple iterations with varying lower
 // excitation energy boundary, accumulates chi2 and alpha values, displays
 // live progress in main canvas. Uses timer-based batching for live updates.
@@ -856,9 +1047,71 @@ void RunMonteCarlo(unsigned connid, int nIterations, double exiLowMin, double ex
 {
     
     if (sett->importGsfMode) {
-        window->Send(connid, "ERROR: Monte Carlo is not available in import mode -- it requires re-running the shape analysis with varied parameters.");
+        // Import-mode MC: perturb loaded data by its error bars, find best alpha per iteration
+        if (!importGsf || importGsf->GetLevGraph()->GetN() == 0) {
+            window->Send(connid, "ERROR: No import gSF data loaded.");
+            return;
+        }
+        if (!sett->doOslo || sett->osloFileName.empty() ||
+            gSystem->AccessPathName(sett->osloFileName.c_str())) {
+            window->Send(connid, "ERROR: Monte Carlo requires Oslo literature data loaded.");
+            return;
+        }
+
+        delete gMCImportState; gMCImportState = nullptr;
+
+        // Load raw Oslo (B=1, alpha=0) for interpolation; blank osloFileName temporarily
+        // is NOT needed here because the lit constructor just reads the file.
+        ShapeGSF *rawOslo = new ShapeGSF(sett);
+        TGraphErrors *rawOsloGraph = rawOslo->GetLevGraph();
+        rawOsloGraph->Sort();
+        int nOslo = rawOsloGraph->GetN();
+        double osloXmin = nOslo > 0 ? rawOsloGraph->GetX()[0]       : 0;
+        double osloXmax = nOslo > 0 ? rawOsloGraph->GetX()[nOslo-1] : 0;
+        if (osloXmin > osloXmax) std::swap(osloXmin, osloXmax);
+
+        gMCImportState = new MCImportState;
+        gMCImportState->currentIter   = 0;
+        gMCImportState->totalIters    = nIterations;
+        gMCImportState->connid        = connid;
+        gMCImportState->stopRequested = false;
+        gMCImportState->alphaMin      = sett->alphaLimit[0];
+        gMCImportState->alphaMax      = sett->alphaLimit[1];
+        gMCImportState->rng           = TRandom3(0);
+
+        TGraphErrors *impGraph = importGsf->GetLevGraph();
+        for (int i = 0; i < impGraph->GetN(); i++) {
+            double x  = impGraph->GetX()[i];
+            double y  = impGraph->GetY()[i];
+            double ey = impGraph->GetEY()[i];
+            if (x < osloXmin || x > osloXmax || ey <= 0) continue;
+            double osloY = rawOsloGraph->Eval(x);
+            if (osloY <= 0) continue;
+            gMCImportState->impX.push_back(x);
+            gMCImportState->impY.push_back(y);
+            gMCImportState->impEY.push_back(ey);
+            gMCImportState->osloAtImpX.push_back(osloY);
+        }
+        delete rawOslo;
+
+        if (gMCImportState->impX.empty()) {
+            window->Send(connid, "ERROR: No import data points overlap with Oslo energy range.");
+            delete gMCImportState; gMCImportState = nullptr;
+            return;
+        }
+
+        canvas->cd(); canvas->Clear();
+        gDisplayMode = 8;
+        for (int i = 0; i < 4; i++) { gMarkerLine[i] = nullptr; gDoubletLine[i] = nullptr; gBgBox[i] = nullptr; }
+
+        window->Send(connid, "MC_STARTED");
+
+        static TTimer *mcImportTimer = new TTimer();
+        mcImportTimer->Connect("Timeout()", 0, 0, "MCImportTimerCallback()");
+        mcImportTimer->Start(100, kFALSE);
         return;
     }
+
     if (!matrix || !sett->doOslo) {
         window->Send(connid, "ERROR: Monte Carlo requires matrix and Oslo literature data loaded.");
         return;
@@ -3532,8 +3785,9 @@ void ProcessData(unsigned connid, const std::string &arg)
         
         // In import mode, only the Oslo overlay is re-transformed; the imported
         // data stays as-loaded.  DrawImportGsfCanvas recreates importLitGsf fresh.
+        // Don't overwrite MC results currently displayed on the canvas.
         if (sett->importGsfMode) {
-            if (importGsf)
+            if (importGsf && gDisplayMode != 8)
                 DrawImportGsfCanvas(connid);
             return;
         }
@@ -3881,6 +4135,9 @@ void ProcessData(unsigned connid, const std::string &arg)
     else if (arg == "STOP_MC") {
         if (gMCState) {
             gMCState->stopRequested = true;
+            window->Send(connid, "MC_STOPPING");
+        } else if (gMCImportState) {
+            gMCImportState->stopRequested = true;
             window->Send(connid, "MC_STOPPING");
         } else {
             window->Send(connid, "No active Monte Carlo simulation.");
