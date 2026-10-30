@@ -67,6 +67,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
       <button class="menu-label" data-menu="file">File</button>
       <div class="menu-dropdown" data-menu="file">
         <button class="menu-item" id="btn-open">Open matrix...</button>
+        <button class="menu-item" id="btn-import-gsf">Import gSF data...</button>
         <div class="menu-divider"></div>
         <button class="menu-item" id="btn-exit">Exit</button>
       </div>
@@ -126,7 +127,10 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
         <button class="tab-btn" data-tab="options">Options</button>
       </div>
 
-      <button class="btn-run" style="margin: 12px 12px 8px 12px; width: calc(100% - 24px);">ShapeIt!</button>
+      <div id="import-mode-banner" style="display:none; margin: 8px 12px 0; padding: 6px 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; font-size: 12px; color: #856404;">
+        Import mode — no matrix loaded
+      </div>
+      <button class="btn-run" style="margin: 8px 12px 8px 12px; width: calc(100% - 24px);">ShapeIt!</button>
 
       <div id="sidebar-scroll">
 
@@ -970,7 +974,10 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       showTab(btn.dataset.tab);
-      
+
+      // In import mode there is no matrix, so skip all matrix/projection canvas switches
+      if (importGsfMode) return;
+
       // If switching to Levels or Projections tab, automatically show bin 1 projection
       if ((btn.dataset.tab === 'levels' || btn.dataset.tab === 'projections') && conn_handle) {
         conn_handle.send('SHOWPROJ');
@@ -1212,6 +1219,10 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
   // Handle file selection
   function confirmSelection(fullPath) {
     if (fbMode === 'open-matrix') conn_handle.send('OPEN:' + fullPath);
+    else if (fbMode === 'open-import-gsf') {
+      conn_handle.send('LOAD_IMPORT_GSF:' + fullPath);
+      markSettingsDirty();
+    }
     else if (fbMode === 'open-oslo') conn_handle.send('OSLO:' + fullPath);
     else if (fbMode === 'open-rho') {
       conn_handle.send('RHO:' + fullPath);
@@ -1317,6 +1328,13 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           lbl.style.opacity = avail ? '1' : '0.5';
           if (avail) lbl.removeAttribute('title');
           else { box.checked = false; lbl.title = 'Load a gSF literature data file first (Settings -> Load gSF literature (Oslo) data...)'; }
+        }
+
+        // Import gSF mode toggle
+        else if (msg.startsWith('IMPORT_GSF_MODE:')) {
+          const on = msg.slice(16) !== '0';
+          if (on) enterImportMode();
+          else    exitImportMode();
         }
         
         // Matrix list for dropdown
@@ -1987,6 +2005,11 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
     openFileBrowser('open-matrix', 'Open matrix (.root file)');
     closeAllMenus();
   });
+
+  document.getElementById('btn-import-gsf').addEventListener('click', () => {
+    openFileBrowser('open-import-gsf', 'Import gSF data file (energy, gSF, error)');
+    closeAllMenus();
+  });
   
   document.getElementById('matrix-select').addEventListener('change', (e) => {
     if (conn_handle) conn_handle.send('SELECTMATRIX:' + e.target.value);
@@ -2388,6 +2411,54 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 
   // Monte Carlo alpha search - with start/stop toggle
   let mcRunning = false;
+  let importGsfMode = false;
+
+  // IDs of Excitation & Bins fields that must be locked in import mode
+  const IMPORT_MODE_LOCKED_FIELDS = [
+    'exc-lo', 'exc-hi', 'binsize-lo', 'bin-variation',
+    'nbins-lo', 'min-counts', 'eff-corr'
+  ];
+
+  function enterImportMode() {
+    importGsfMode = true;
+    document.querySelector('.btn-run').textContent = 'Re-read gSF files';
+    document.getElementById('import-mode-banner').style.display = 'block';
+
+    // Dim & block Levels, Projections, Options tabs
+    ['levels', 'projections', 'options'].forEach(tabName => {
+      const btn = document.querySelector('.tab-btn[data-tab="' + tabName + '"]');
+      if (btn) { btn.style.opacity = '0.35'; btn.style.pointerEvents = 'none'; }
+    });
+
+    // Grey out non-scale parts of Excitation & Bins
+    IMPORT_MODE_LOCKED_FIELDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.disabled = true; el.style.opacity = '0.4'; }
+    });
+    document.getElementById('effi-file-label').style.opacity = '0.4';
+
+    // Switch to Excitation & Bins without sending SHOWMATRIX
+    showTab('excitation');
+  }
+
+  function exitImportMode() {
+    importGsfMode = false;
+    document.querySelector('.btn-run').textContent = 'ShapeIt!';
+    document.getElementById('import-mode-banner').style.display = 'none';
+
+    // Restore tabs
+    ['levels', 'projections', 'options'].forEach(tabName => {
+      const btn = document.querySelector('.tab-btn[data-tab="' + tabName + '"]');
+      if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+    });
+
+    // Restore Excitation & Bins fields
+    IMPORT_MODE_LOCKED_FIELDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.disabled = false; el.style.opacity = ''; }
+    });
+    document.getElementById('effi-file-label').style.opacity = '';
+  }
   const mcButton = document.getElementById('btn-run-mc');
   
   mcButton.addEventListener('click', () => {
@@ -2413,6 +2484,14 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
   
   document.querySelector('.btn-run').addEventListener('click', () => {
       if (!conn_handle) return;
+
+      // In import mode, just re-read the gSF file (no matrix parameters needed)
+      if (importGsfMode) {
+        conn_handle.send('REREAD_IMPORT_GSF');
+        setStatus('Reading gSF import file...');
+        return;
+      }
+
       const val = id => document.getElementById(id).value;
       const isDoublet1 = document.getElementById('enablePeak2L1').checked ? 1 : 0;
       const isDoublet2 = document.getElementById('enablePeak2L2').checked ? 1 : 0;

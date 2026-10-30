@@ -60,15 +60,17 @@ ShapeGSF::ShapeGSF(ShapeSetting* t_sett):m_sett(t_sett)
     inp.open(m_sett->osloFileName.c_str());
     if (inp.is_open() ) {
         
-        double e_gamma;
-        double oslo_gSF_high, oslo_gSF_low, oslo_gSF, oslo_dgSF;
-        while ( !inp.eof() ) {
-            inp >> e_gamma >> oslo_gSF_high >>oslo_gSF_low;
-            oslo_gSF = ( oslo_gSF_high + oslo_gSF_low ) / 2;
-            oslo_dgSF =( oslo_gSF_high - oslo_gSF_low ) / 2;
+        std::string line;
+        while ( std::getline(inp, line) ) {
+            if (line.empty() || line[0] == '#') continue;
+            double e_gamma, oslo_gSF_high, oslo_gSF_low;
+            std::istringstream iss(line);
+            if (!(iss >> e_gamma >> oslo_gSF_high >> oslo_gSF_low)) continue;
+            double oslo_gSF  = ( oslo_gSF_high + oslo_gSF_low ) / 2;
+            double oslo_dgSF = ( oslo_gSF_high - oslo_gSF_low ) / 2;
             
             if (m_sett->doMC) {
-                 levGraph->SetPoint(levGraph->GetN(), e_gamma,r->Gaus(oslo_gSF,oslo_dgSF));
+                 levGraph->SetPoint(levGraph->GetN(), e_gamma, r->Gaus(oslo_gSF, oslo_dgSF));
                  levGraph->SetPointError(levGraph->GetN() - 1, 0, 0);
             }
             else {
@@ -353,13 +355,84 @@ void ShapeGSF::Print() {
 }
 
 void ShapeGSF::Scale(double factor){
-    for (int i = 0; i < levGraph_1->GetN(); i++) {
-        levGraph_1->GetY()[i] *= factor;
-        levGraph_2->GetY()[i] *= factor;
-        levGraph_1->GetEY()[i] *= factor;
-        levGraph_2->GetEY()[i] *= factor;
+    if (m_sett->importGsfMode) {
+        // In import mode data lives directly in levGraph; levGraph_1/2 are empty
+        for (int i = 0; i < levGraph->GetN(); i++) {
+            levGraph->GetY()[i]  *= factor;
+            levGraph->GetEY()[i] *= factor;
+        }
+    } else {
+        for (int i = 0; i < levGraph_1->GetN(); i++) {
+            levGraph_1->GetY()[i]  *= factor;
+            levGraph_2->GetY()[i]  *= factor;
+            levGraph_1->GetEY()[i] *= factor;
+            levGraph_2->GetEY()[i] *= factor;
+        }
+        Merge();
     }
-    //update levGraph
-    Merge();
+}
+
+// Reads a 3-column text file (energy keV, gSF value, gSF error) and populates
+// levGraph directly.  Lines starting with '#' are treated as comments.
+// Returns true if at least one point was loaded.
+bool ShapeGSF::LoadFromFile(const std::string& path) {
+    levGraph->Set(0);
+    levGraph_1->Set(0);
+    levGraph_2->Set(0);
+    m_B     = 1;
+    m_alpha = 0;
+
+    if (path.empty()) {
+        std::cout << "No import gSF file specified." << std::endl;
+        return false;
+    }
+
+    std::ifstream inp(path.c_str());
+    if (!inp.is_open()) {
+        std::cout << "ERROR: Could not open import gSF file: " << path << std::endl;
+        return false;
+    }
+
+    if (m_sett->verbose)
+        std::cout << "\nReading imported gSF data from: " << path << std::endl;
+
+    std::string line;
+    int nPoints = 0;
+    while (std::getline(inp, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        double energy, gsf, dgsf;
+        std::istringstream iss(line);
+        if (!(iss >> energy >> gsf >> dgsf)) continue;
+        levGraph->SetPoint(nPoints, energy, gsf);
+        levGraph->SetPointError(nPoints, 0, dgsf);
+        nPoints++;
+    }
+    inp.close();
+
+    if (nPoints == 0) {
+        std::cout << "WARNING: No data points read from import gSF file: " << path << std::endl;
+        return false;
+    }
+
+    levGraph->Sort();
+
+    // Apply the current gSF normalisation scale
+    double norm = m_sett->gSF_norm;
+    if (norm != 1.0) {
+        for (int i = 0; i < levGraph->GetN(); i++) {
+            levGraph->GetY()[i]  *= norm;
+            levGraph->GetEY()[i] *= norm;
+        }
+    }
+
+    levGraph->SetMarkerStyle(22);
+    levGraph->SetMarkerSize(2);
+    levGraph->SetMarkerColor(6);
+    levGraph->SetTitle("Imported gSF;E_{#gamma} (keV);f(E_{#gamma}) (MeV^{-3})");
+
+    if (m_sett->verbose)
+        std::cout << "Loaded " << nPoints << " gSF points from import file." << std::endl;
+
+    return true;
 }
 

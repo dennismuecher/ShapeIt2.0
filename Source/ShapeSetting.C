@@ -274,6 +274,8 @@ void ShapeSetting::SaveSettings() {
     outfile << "tripletPeakPos2 " << tripletPeakPos[1] <<"\n";
     outfile << "rhoFileName " << rhoFileName <<"\n";
     outfile << "rhoScale " << rhoScale <<"\n";
+    outfile << "importGsfFileName " << importGsfFileName <<"\n";
+    outfile << "importGsfMode " << importGsfMode <<"\n";
     outfile << "showNLDOriginal " << showNLDOriginal <<"\n";
     outfile << "showNLDTransformed " << showNLDTransformed <<"\n";
     outfile << "showNLDDiscrete " << showNLDDiscrete <<"\n";
@@ -418,6 +420,13 @@ void ShapeSetting::ReadSettings() {
                 rhoFileName = (start != std::string::npos) ? rhoFileName.substr(start) : "";
                 TrimCR(rhoFileName);
             }
+            if (word == "importGsfFileName" ) {
+                getline(isstr, importGsfFileName);
+                size_t start = importGsfFileName.find_first_not_of(" \t");
+                importGsfFileName = (start != std::string::npos) ? importGsfFileName.substr(start) : "";
+                TrimCR(importGsfFileName);
+            }
+            if (word == "importGsfMode" ) isstr >> importGsfMode;
             for (int i = 0; i < 6; i++) {
                 std::string ldname = "ldmodel"+to_string(i+1);
                 if (word == ldname) {
@@ -503,6 +512,8 @@ void ShapeSetting::PrintSettings(){
     std::cout  << "matrixName " << matrixName<<"\n";
     std::cout  << "Literature values gSF " << osloFileName<<"\n";
     std::cout  << "Literature values level density " << rhoFileName<<"\n";
+    std::cout  << "Import gSF file " << importGsfFileName<<"\n";
+    std::cout  << "Import gSF mode " << importGsfMode<<"\n";
     std::cout  << "Discrete Level File " << discreteLevelFile << " " << discreteBins <<"\n";
 
     for (int i =0; i < 6; i++) {

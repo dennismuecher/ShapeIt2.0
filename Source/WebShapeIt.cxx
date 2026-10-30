@@ -96,6 +96,8 @@ TCanvas *canvas = nullptr;
 ShapeSetting   *sett    = nullptr;
 ShapeMatrix    *matrix  = nullptr;
 ShapeCollector *gSFColl = nullptr;
+ShapeGSF       *importGsf    = nullptr;  // standalone gSF for import mode (no matrix)
+ShapeGSF       *importLitGsf = nullptr;  // Oslo literature overlay for import mode
 std::string currentMatrixPath;
 std::string gStartDir;
 
@@ -853,6 +855,10 @@ void MCTimerCallback()
 void RunMonteCarlo(unsigned connid, int nIterations, double exiLowMin, double exiLowMax)
 {
     
+    if (sett->importGsfMode) {
+        window->Send(connid, "ERROR: Monte Carlo is not available in import mode -- it requires re-running the shape analysis with varied parameters.");
+        return;
+    }
     if (!matrix || !sett->doOslo) {
         window->Send(connid, "ERROR: Monte Carlo requires matrix and Oslo literature data loaded.");
         return;
@@ -1313,9 +1319,101 @@ static void SendWidthCalibDone(unsigned connid)
     window->Send(connid, std::string("WIDTH_CALIB_DONE:") + (done ? "1" : "0"));
 }
 
+// Draws imported gSF (and Oslo literature overlay if doOslo) onto the canvas.
+// Called both from RunImportGsf and from ALPHA_TRANSFORM in import mode.
+static void DrawImportGsfCanvas(unsigned connid)
+{
+    if (!importGsf) return;
+
+    canvas->cd();
+    canvas->Clear();
+    for (int i = 0; i < 4; i++) { gMarkerLine[i] = nullptr; gDoubletLine[i] = nullptr; gBgBox[i] = nullptr; }
+    gDisplayMode = 0;
+
+    TGraphErrors *gsfGraph = importGsf->GetLevGraph();
+    bool firstDrawn = false;
+
+    if (sett->doOslo && !sett->osloFileName.empty() &&
+        !gSystem->AccessPathName(sett->osloFileName.c_str())) {
+        // Recreate the lit overlay object; keep it alive as a global so the
+        // drawn graph pointer remains valid until the next redraw.
+        delete importLitGsf;
+        importLitGsf = new ShapeGSF(sett);
+        importLitGsf->Transform(sett->lit_norm, sett->lit_alpha);
+        TGraphErrors *litGraph = importLitGsf->GetLevGraph();
+        if (litGraph && litGraph->GetN() > 0) {
+            litGraph->SetFillColor(kBlue - 10);
+            litGraph->SetFillStyle(3013);
+            litGraph->SetLineColor(kBlue);
+            litGraph->SetLineWidth(2);
+            litGraph->Draw("AL3");
+            firstDrawn = true;
+        }
+    }
+
+    if (gsfGraph && gsfGraph->GetN() > 0) {
+        gsfGraph->Draw(firstDrawn ? "P SAME" : "AP");
+        TH1F *hist = dynamic_cast<TH1F*>(gsfGraph->GetHistogram());
+        if (hist && !firstDrawn) {
+            hist->SetTitle("Imported gSF;E_{#gamma} (keV);f(E_{#gamma}) (MeV^{-3})");
+            hist->GetXaxis()->SetTitleSize(0.04);
+            hist->GetYaxis()->SetTitleSize(0.04);
+            hist->GetXaxis()->SetTitleOffset(1.0);
+            hist->GetYaxis()->SetTitleOffset(1.2);
+        }
+    }
+
+    gPad->SetLogy(1);
+    gHaveLastRange = false;
+    PushCanvasUpdate();
+}
+
+// Loads the import gSF file, resets importGsf, and draws the result.
+// Called from RunShapeIt when importGsfMode is active.
+static void RunImportGsf(unsigned connid)
+{
+    if (sett->importGsfFileName.empty()) {
+        window->Send(connid, "ERROR: No import gSF file specified.");
+        return;
+    }
+    if (gSystem->AccessPathName(sett->importGsfFileName.c_str())) {
+        window->Send(connid, "ERROR: Import gSF file not found: " + sett->importGsfFileName);
+        return;
+    }
+
+    delete importGsf;
+    importGsf = nullptr;
+
+    // Temporarily blank osloFileName so the ShapeGSF constructor does not also
+    // read the literature file into levGraph (LoadFromFile will overwrite anyway,
+    // but this avoids the unnecessary file read).
+    std::string savedOslo = sett->osloFileName;
+    sett->osloFileName = "";
+    importGsf = new ShapeGSF(sett);
+    sett->osloFileName = savedOslo;
+
+    if (!importGsf->LoadFromFile(sett->importGsfFileName)) {
+        window->Send(connid, "ERROR: Failed to read import gSF file: " + sett->importGsfFileName);
+        delete importGsf;
+        importGsf = nullptr;
+        return;
+    }
+
+    DrawImportGsfCanvas(connid);
+
+    int n = importGsf->GetLevGraph()->GetN();
+    window->Send(connid, "Imported gSF: " + std::to_string(n) + " points read from " +
+                          sett->importGsfFileName);
+}
+
 void RunShapeIt(unsigned connid)
 {
-    
+    // In import mode, load directly from the user-supplied gSF file
+    if (sett->importGsfMode) {
+        RunImportGsf(connid);
+        return;
+    }
+
     if (!matrix) {
         window->Send(connid, "No matrix loaded yet -- open one first.");
         return;
@@ -1794,6 +1892,15 @@ void ProcessData(unsigned connid, const std::string &arg)
         // Enable width calibration now that we have a matrix loaded
         window->Send(connid, "WIDTH_CALIB_AVAILABLE:1");
         SendWidthCalibDone(connid);
+
+        // Opening a matrix exits import mode
+        if (sett->importGsfMode) {
+            sett->importGsfMode = false;
+            delete importGsf;    importGsf    = nullptr;
+            delete importLitGsf; importLitGsf = nullptr;
+            window->Send(connid, "IMPORT_GSF_MODE:0");
+        }
+
         window->Send(connid, "Matrix opened: " + path);
     }
     else if (starts_with(arg, "SELECTMATRIX:")) {
@@ -1826,6 +1933,35 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->doOslo = true;
         window->Send(connid, "OSLO_AVAILABLE:1");
         window->Send(connid, "gSF literature file set: " + path);
+        if (sett->importGsfMode && importGsf)
+            DrawImportGsfCanvas(connid);
+    }
+    else if (starts_with(arg, "LOAD_IMPORT_GSF:")) {
+        std::string path = after_prefix(arg, "LOAD_IMPORT_GSF:");
+
+        char* expandedPath = gSystem->ExpandPathName(path.c_str());
+        if (expandedPath) {
+            path = expandedPath;
+            delete[] expandedPath;
+        }
+
+        if (gSystem->AccessPathName(path.c_str())) {
+            window->Send(connid, "Import gSF file not found: " + path);
+            return;
+        }
+
+        sett->importGsfFileName = path;
+        sett->importGsfMode = true;
+
+        window->Send(connid, "IMPORT_GSF_MODE:1");
+        RunImportGsf(connid);
+    }
+    else if (arg == "REREAD_IMPORT_GSF") {
+        if (!sett->importGsfMode) {
+            window->Send(connid, "Not in import mode.");
+            return;
+        }
+        RunImportGsf(connid);
     }
     else if (starts_with(arg, "RHO:")) {
         std::string path = after_prefix(arg, "RHO:");
@@ -3355,6 +3491,14 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->lit_alpha = v[0];
         sett->lit_norm = v[1];
         
+        // In import mode, only the Oslo overlay is re-transformed; the imported
+        // data stays as-loaded.  DrawImportGsfCanvas recreates importLitGsf fresh.
+        if (sett->importGsfMode) {
+            if (importGsf)
+                DrawImportGsfCanvas(connid);
+            return;
+        }
+
         // If MC results are currently displayed, don't overwrite the canvas with gSF results.
         // The alpha value is already stored above and will be used on the next ShapeIt run.
         if (gDisplayMode == 8)
@@ -3491,6 +3635,13 @@ void ProcessData(unsigned connid, const std::string &arg)
     else if (arg == "REDRAW_GRAPH") {
         
         // Redraw the gSF graph with current transformation (mirrors TransGraph() from native code)
+        if (sett->importGsfMode) {
+            if (importGsf) {
+                DrawImportGsfCanvas(connid);
+                window->Send(connid, "Graph redrawn with alpha=" + std::to_string(sett->lit_alpha));
+            }
+            return;
+        }
         if (!gSFColl) {
             window->Send(connid, "Run ShapeIt first before applying slope correction.");
             return;

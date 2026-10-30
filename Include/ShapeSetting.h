@@ -36,6 +36,8 @@ public:
 	std::string osloFileName = "";				 //name of file containing reference data for gSF
     std::string rhoFileName = "";                 //name of file containing reference data for level density
 	std::string effiFileName = "";				 //name of file containing efficiency correction
+    std::string importGsfFileName = "";           //name of file containing externally imported gSF data (energy, gSF, error)
+    bool importGsfMode = false;                   //if true, gSF is loaded from importGsfFileName instead of matrix analysis
     std::string settFileName = "";                  //name of settings save file
     std::string discreteLevelFile = "";             //name of discrete level density file 
     std::string ldFileName[6];                   //file names of the ldmodel talys calculations

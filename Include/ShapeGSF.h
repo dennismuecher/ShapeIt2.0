@@ -65,6 +65,7 @@ public:
     void                Scale(double factor);
     void                Transform(double B_t, double alpha_t);
     void                Transform();
+    bool                LoadFromFile(const std::string& path);  //load gSF from 3-column text file (energy, gSF, error)
 
     void                SetESize(double ene)    {m_matrix->SetESize(ene);}
     void                SetEne0(double ene)     {m_matrix->SetEne0(ene);}
