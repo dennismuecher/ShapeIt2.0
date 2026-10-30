@@ -971,8 +971,8 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
     btn.addEventListener('click', () => {
       showTab(btn.dataset.tab);
       
-      // If switching to Projections tab, automatically show bin 1 projection
-      if (btn.dataset.tab === 'projections' && conn_handle) {
+      // If switching to Levels or Projections tab, automatically show bin 1 projection
+      if ((btn.dataset.tab === 'levels' || btn.dataset.tab === 'projections') && conn_handle) {
         conn_handle.send('SHOWPROJ');
         setStatus('Showing bin 1 projection');
       }
@@ -1936,11 +1936,9 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
     const msg = [
       val('lvl1-lo'), val('lvl1-hi'),
       val('lvl2-lo'), val('lvl2-hi'),
-      isDoublet1, val('peakPos2L1'), val('peakPos2L1'),  // Using peak position instead of range
-      isDoublet2, val('peakPos2L2'), val('peakPos2L2'),  // Using peak position instead of range
+      isDoublet1, isDoublet2,
       fixWidth1, fixWidth2,
-      isTriplet1, val('peakPos3L1'), val('peakPos3L1'),  // Using peak position instead of range
-      isTriplet2, val('peakPos3L2'), val('peakPos3L2'),  // Using peak position instead of range
+      isTriplet1, isTriplet2,
       fixTripletWidth1, fixTripletWidth2,
     ].join('|');
     if (conn_handle) {

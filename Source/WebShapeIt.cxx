@@ -1558,15 +1558,16 @@ void RunShapeIt(unsigned connid)
         }
     }
 
-    // Add chi2 and alpha text box if Oslo data is displayed (matches ShapeFrame::getPaveTextgSF())
+    // Add chi2 and d_alpha text box if Oslo data is displayed (matches ShapeFrame::getPaveTextgSF())
     if (sett->doOslo) {
-        TPaveText *t = new TPaveText(0.8, 0.85, 0.95, 0.95, "brNDC");
-        t->SetTextSize(0.025);
-        t->SetTextAlign(13);
-        t->SetFillColor(10);
-        t->SetTextColor(61);
-        t->AddText(Form("slope #alpha: %4.2f", sett->lit_alpha));
-        t->AddText(Form("#chi^{2} value: %4.2f", gSFColl->getChi2()));
+        TPaveText *t = new TPaveText(0.65, 0.13, 0.92, 0.23, "brNDC");
+        t->SetTextSize(0.026);
+        t->SetTextAlign(12);
+        t->SetBorderSize(0);
+        t->SetFillColorAlpha(kWhite, 0.80);
+        t->SetTextFont(42);
+        t->AddText(Form("#Delta#alpha: %+.2f", sett->lit_alpha));
+        t->AddText(Form("#chi^{2}: %.2f", gSFColl->getChi2()));
         t->Draw();
     }
     // Fallback: if no error-bar graphs were found (e.g. nothing matched
@@ -3469,15 +3470,16 @@ void ProcessData(unsigned connid, const std::string &arg)
                 }
             }
             
-            // Add chi2 and alpha text box if Oslo data is displayed
+            // Add chi2 and d_alpha text box if Oslo data is displayed
             if (sett->doOslo) {
-                TPaveText *t = new TPaveText(0.8, 0.85, 0.95, 0.95, "brNDC");
-                t->SetTextSize(0.025);
-                t->SetTextAlign(13);
-                t->SetFillColor(10);
-                t->SetTextColor(61);
-                t->AddText(Form("slope #alpha: %4.2f", sett->lit_alpha));
-                t->AddText(Form("#chi^{2} value: %4.2f", gSFColl->getChi2()));
+                TPaveText *t = new TPaveText(0.65, 0.13, 0.92, 0.23, "brNDC");
+                t->SetTextSize(0.026);
+                t->SetTextAlign(12);
+                t->SetBorderSize(0);
+                t->SetFillColorAlpha(kWhite, 0.80);
+                t->SetTextFont(42);
+                t->AddText(Form("#Delta#alpha: %+.2f", sett->lit_alpha));
+                t->AddText(Form("#chi^{2}: %.2f", gSFColl->getChi2()));
                 t->Draw();
             }
             
@@ -3645,15 +3647,16 @@ void ProcessData(unsigned connid, const std::string &arg)
             }
         }
 
-        // Add chi2 and alpha text box if Oslo data is displayed
+        // Add chi2 and d_alpha text box if Oslo data is displayed
         if (sett->doOslo) {
-            TPaveText *t = new TPaveText(0.8, 0.85, 0.95, 0.95, "brNDC");
-            t->SetTextSize(0.025);
-            t->SetTextAlign(13);
-            t->SetFillColor(10);
-            t->SetTextColor(61);
-            t->AddText(Form("slope #alpha: %4.2f", sett->lit_alpha));
-            t->AddText(Form("#chi^{2} value: %4.2f", gSFColl->getChi2()));
+            TPaveText *t = new TPaveText(0.65, 0.13, 0.92, 0.23, "brNDC");
+            t->SetTextSize(0.026);
+            t->SetTextAlign(12);
+            t->SetBorderSize(0);
+            t->SetFillColorAlpha(kWhite, 0.80);
+            t->SetTextFont(42);
+            t->AddText(Form("#Delta#alpha: %+.2f", sett->lit_alpha));
+            t->AddText(Form("#chi^{2}: %.2f", gSFColl->getChi2()));
             t->Draw();
         }
         
