@@ -107,7 +107,7 @@ TGraphErrors* graph_t_high = Transform(1,alpha_h);
 TGraphAsymmErrors* graph_t = new TGraphAsymmErrors();
 
     for (int i=0; i < rhoGraph->GetN(); i++) {
-        graph_t->SetPoint( graph_t->GetN(), rhoGraph->GetX()[i], rhoScaleTrafo*graph_t_mid->GetY()[i]);
+        graph_t->SetPoint( graph_t->GetN(), rhoGraph->GetX()[i], graph_t_mid->GetY()[i]);
 
         double EY_l =TMath::Abs(graph_t_low->GetY()[i] -graph_t_mid->GetY()[i]);
         double EY_h =TMath::Abs(graph_t_high->GetY()[i] -graph_t_mid->GetY()[i]);
@@ -115,7 +115,7 @@ TGraphAsymmErrors* graph_t = new TGraphAsymmErrors();
         EY_l = TMath::Sqrt(TMath::Power(EY_l,2) + TMath::Power(graph_t_mid->GetEY()[i],2));
         EY_h = TMath::Sqrt(TMath::Power(EY_h,2) + TMath::Power(graph_t_mid->GetEY()[i],2));
         
-        graph_t->SetPointError(graph_t->GetN()-1,0,0,rhoScaleTrafo*EY_l,rhoScaleTrafo*EY_h);
+        graph_t->SetPointError(graph_t->GetN()-1,0,0,EY_l,EY_h);
     }
     graph_t->SetMarkerStyle(22);
     graph_t->SetMarkerColor(kBlue);

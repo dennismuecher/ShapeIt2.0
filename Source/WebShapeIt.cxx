@@ -412,10 +412,10 @@ void SendSettingsSync(unsigned connid)
     msg += std::to_string(sett->fixTripletPeakPos[1] ? 1 : 0) + "|" + std::to_string(sett->tripletPeakPos[1]) + "|";
     msg += std::to_string(sett->gsfPeakRef[0]) + "|" + std::to_string(sett->gsfPeakRef[1]) + "|";
     msg += std::to_string(sett->rhoScale) + "|";                               // index 59
-    msg += std::to_string(sett->rhoScaleTrafo) + "|";                          // index 60
-    msg += std::to_string(sett->showNLDOriginal ? 1 : 0) + "|";               // index 61
-    msg += std::to_string(sett->showNLDTransformed ? 1 : 0) + "|";             // index 62
-    msg += std::to_string(sett->showNLDDiscrete ? 1 : 0);                      // index 63
+    msg += std::to_string(sett->showNLDOriginal ? 1 : 0) + "|";               // index 60
+    msg += std::to_string(sett->showNLDTransformed ? 1 : 0) + "|";             // index 61
+    msg += std::to_string(sett->showNLDDiscrete ? 1 : 0) + "|";               // index 62
+    msg += std::to_string(sett->lit_alpha_error[0]);                           // index 63
 
     window->Send(connid, msg);
 }
@@ -2101,8 +2101,10 @@ void ProcessData(unsigned connid, const std::string &arg)
     else if (starts_with(arg, "RHOSCALE:")) {
         sett->rhoScale = std::stod(after_prefix(arg, "RHOSCALE:"));
     }
-    else if (starts_with(arg, "RHOTRASCALE:")) {
-        sett->rhoScaleTrafo = std::stod(after_prefix(arg, "RHOTRASCALE:"));
+    else if (starts_with(arg, "ALPHAERROR:")) {
+        double ae = std::stod(after_prefix(arg, "ALPHAERROR:"));
+        sett->lit_alpha_error[0] = ae;
+        sett->lit_alpha_error[1] = ae;
     }
     else if (starts_with(arg, "SHOWNLDORIG:")) {
         sett->showNLDOriginal = std::stoi(after_prefix(arg, "SHOWNLDORIG:")) != 0;
@@ -2553,20 +2555,30 @@ void ProcessData(unsigned connid, const std::string &arg)
         bool showTrafo = sett->showNLDTransformed;
         if (!showOrig && !showTrafo) showOrig = true;  // always show at least one
 
-        // Compute transformed graph BEFORE deleting tempRho (Transform needs the object alive)
-        TGraphErrors *grTransformed = nullptr;
+        // Compute transformed graph BEFORE deleting tempRho (rhoTrafoGraph needs the object alive)
+        // Uses lit_alpha_error[0] as symmetric d_alpha to produce error bands
+        TGraphAsymmErrors *grTransformed = nullptr;
         if (showTrafo) {
-            grTransformed = tempRho->Transform(1, sett->lit_alpha);
+            double d_alpha = sett->lit_alpha_error[0];
+            grTransformed = tempRho->rhoTrafoGraph(sett->lit_alpha,
+                                                   sett->lit_alpha - d_alpha,
+                                                   sett->lit_alpha + d_alpha);
             if (grTransformed) {
+                // Convert from keV (internal) to MeV for display
                 for (int i = 0; i < grTransformed->GetN(); i++) {
-                    grTransformed->GetX()[i]  /= 1000.0;
-                    grTransformed->GetY()[i]  *= 1000.0 * sett->rhoScaleTrafo;
-                    grTransformed->GetEY()[i] *= 1000.0 * sett->rhoScaleTrafo;
+                    double x   = grTransformed->GetX()[i]      / 1000.0;
+                    double y   = grTransformed->GetY()[i]      * 1000.0;
+                    double eyl = grTransformed->GetEYlow()[i]  * 1000.0;
+                    double eyh = grTransformed->GetEYhigh()[i] * 1000.0;
+                    grTransformed->SetPoint(i, x, y);
+                    grTransformed->SetPointError(i, 0, 0, eyl, eyh);
                 }
                 grTransformed->SetMarkerStyle(21);
                 grTransformed->SetMarkerSize(0.8);
                 grTransformed->SetMarkerColor(kOrange+1);
                 grTransformed->SetLineColor(kOrange+1);
+                grTransformed->SetFillColorAlpha(kOrange+1, 0.25);
+                grTransformed->SetFillStyle(1001);
                 grTransformed->SetTitle("Transformed NLD");
             }
         }
@@ -2610,17 +2622,26 @@ void ProcessData(unsigned connid, const std::string &arg)
                     double dlMaxE = *std::max_element(dlEnergies.begin(), dlEnergies.end());
                     if (dlMaxE >= 50.0)
                         for (auto &e : dlEnergies) e /= 1000.0;
-                    // Bin width in MeV (sett->discreteBins is stored in keV)
+                    // Bin width in MeV: use minimum consecutive spacing to handle
+                    // sparse files where the first gap may be much larger than the grid
                     double dlBinWidth = sett->discreteBins / 1000.0;
-                    if (dlEnergies.size() > 1)
-                        dlBinWidth = dlEnergies[1] - dlEnergies[0];
+                    if (dlEnergies.size() > 1) {
+                        dlBinWidth = std::numeric_limits<double>::max();
+                        for (size_t i = 1; i < dlEnergies.size(); i++) {
+                            double diff = dlEnergies[i] - dlEnergies[i-1];
+                            if (diff > 1e-9 && diff < dlBinWidth)
+                                dlBinWidth = diff;
+                        }
+                    }
                     double dlEMin = dlEnergies.front() - dlBinWidth / 2.0;
                     double dlEMax = dlEnergies.back() + dlBinWidth / 2.0;
                     int dlNBins = (int)((dlEMax - dlEMin) / dlBinWidth + 0.5);
                     delete gROOT->FindObject("hDiscrete");
                     hDiscrete = new TH1D("hDiscrete", "Discrete Level Density", dlNBins, dlEMin, dlEMax);
-                    for (size_t k = 0; k < dlEnergies.size(); k++)
-                        hDiscrete->Fill(dlEnergies[k], dlStates[k] / dlBinWidth);
+                    for (size_t k = 0; k < dlEnergies.size(); k++) {
+                        int bin = hDiscrete->FindBin(dlEnergies[k]);
+                        hDiscrete->SetBinContent(bin, dlStates[k]);
+                    }
                     hDiscrete->SetLineColor(kRed);
                     hDiscrete->SetLineWidth(2);
                     hDiscrete->SetFillColor(kRed);
@@ -2629,17 +2650,39 @@ void ProcessData(unsigned connid, const std::string &arg)
             }
         }
 
-        // First graph uses "APE" to create axes; additional ones use "P SAME"
-        TGraphErrors *firstGraph = showOrig ? grLevelDensity : grTransformed;
+        // Compute global y maximum including error bars from all visible graphs
+        double yMax = 0;
+        if (showOrig) {
+            for (int i = 0; i < grLevelDensity->GetN(); i++) {
+                double top = grLevelDensity->GetY()[i] + grLevelDensity->GetEY()[i];
+                if (top > yMax) yMax = top;
+            }
+        }
+        if (showTrafo && grTransformed) {
+            for (int i = 0; i < grTransformed->GetN(); i++) {
+                double top = grTransformed->GetY()[i] + grTransformed->GetEYhigh()[i];
+                if (top > yMax) yMax = top;
+            }
+        }
+        if (hDiscrete && hDiscrete->GetMaximum() > yMax)
+            yMax = hDiscrete->GetMaximum();
+
+        // First graph uses "APE" to create axes; additional ones use "SAME"
+        TGraphErrors *firstGraph = showOrig ? grLevelDensity : (TGraphErrors*)grTransformed;
         firstGraph->Draw("APE");
         firstGraph->GetXaxis()->SetTitle("Excitation Energy (MeV)");
         firstGraph->GetYaxis()->SetTitle("Level Density (1/MeV)");
+        if (yMax > 0)
+            firstGraph->GetHistogram()->SetMaximum(yMax * 2.0);
         canvas->SetLogy();
 
         if (showOrig && grLevelDensity != firstGraph)
-            grLevelDensity->Draw("P SAME");
-        if (showTrafo && grTransformed && grTransformed != firstGraph)
-            grTransformed->Draw("P SAME");
+            grLevelDensity->Draw("PE SAME");
+        if (showTrafo && grTransformed && (TGraphErrors*)grTransformed != firstGraph) {
+            // Draw filled error band first, then points on top
+            grTransformed->Draw("E3 SAME");
+            grTransformed->Draw("PE SAME");
+        }
 
         if (hDiscrete)
             hDiscrete->Draw("HIST SAME");
@@ -2647,12 +2690,17 @@ void ProcessData(unsigned connid, const std::string &arg)
         // Legend if more than one dataset is visible
         int nShown = (showOrig ? 1 : 0) + (showTrafo && grTransformed ? 1 : 0) + (hDiscrete ? 1 : 0);
         if (nShown > 1) {
-            TLegend *ldLeg = new TLegend(0.55, 0.72, 0.88, 0.88);
+            TLegend *ldLeg = new TLegend(0.55, 0.12, 0.88, 0.22);
             ldLeg->SetBorderSize(1);
+            ldLeg->SetTextSize(0.022);
             if (showOrig)
                 ldLeg->AddEntry(grLevelDensity, "Original NLD", "PE");
-            if (showTrafo && grTransformed)
-                ldLeg->AddEntry(grTransformed, Form("Transformed (#Delta#alpha=%.2f)", sett->lit_alpha), "PE");
+            if (showTrafo && grTransformed) {
+                if (sett->lit_alpha_error[0] > 0)
+                    ldLeg->AddEntry(grTransformed, Form("Transformed (#alpha=%.2f #pm %.2f)", sett->lit_alpha, sett->lit_alpha_error[0]), "PEF");
+                else
+                    ldLeg->AddEntry(grTransformed, Form("Transformed (#alpha=%.2f)", sett->lit_alpha), "PE");
+            }
             if (hDiscrete)
                 ldLeg->AddEntry(hDiscrete, "Discrete levels", "L");
             ldLeg->Draw();
@@ -2660,8 +2708,8 @@ void ProcessData(unsigned connid, const std::string &arg)
 
         std::string ldMsg = "Displaying level density";
         if (showOrig)  ldMsg += ": " + std::to_string(grLevelDensity->GetN()) + " points";
-        if (showTrafo) ldMsg += " + transformed (alpha=" + std::to_string(sett->lit_alpha) + ")";
-        if (hDiscrete) ldMsg += " + discrete levels";
+        if (showTrafo) ldMsg += " + transformed (alpha=" + std::to_string(sett->lit_alpha) + ", d_alpha=" + std::to_string(sett->lit_alpha_error[0]) + ")";
+        if (hDiscrete) ldMsg += " + discrete levels (" + std::to_string(hDiscrete->GetNbinsX()) + " bins, binW=" + std::to_string(hDiscrete->GetBinWidth(1)) + " MeV)";
         window->Send(connid, ldMsg);
 
         PushCanvasUpdate();
@@ -2706,10 +2754,17 @@ void ProcessData(unsigned connid, const std::string &arg)
         if (maxE >= 50.0)
             for (auto &e : energies) e /= 1000.0;
         
-        // Determine bin width from data spacing (in MeV)
+        // Bin width in MeV: use minimum consecutive spacing to handle
+        // sparse files where the first gap may be much larger than the grid
         double binWidth = sett->discreteBins / 1000.0;
-        if (energies.size() > 1)
-            binWidth = energies[1] - energies[0];
+        if (energies.size() > 1) {
+            binWidth = std::numeric_limits<double>::max();
+            for (size_t i = 1; i < energies.size(); i++) {
+                double diff = energies[i] - energies[i-1];
+                if (diff > 1e-9 && diff < binWidth)
+                    binWidth = diff;
+            }
+        }
         
         // Create histogram
         double eMin = energies.front() - binWidth/2.0;
@@ -2720,9 +2775,11 @@ void ProcessData(unsigned connid, const std::string &arg)
         TH1D* hDiscrete = new TH1D("hDiscrete", "Discrete Level Density;E_{x} [MeV];#rho [MeV^{-1}]", 
                                     nBins, eMin, eMax);
         
-        // Fill histogram: level density in /MeV, independent of bin width
-        for (size_t i = 0; i < energies.size(); i++)
-            hDiscrete->Fill(energies[i], states[i] / binWidth);
+        // Set bin content directly from file values (no implicit 1/binWidth scaling)
+        for (size_t i = 0; i < energies.size(); i++) {
+            int bin = hDiscrete->FindBin(energies[i]);
+            hDiscrete->SetBinContent(bin, states[i]);
+        }
         
         // Draw on canvas
         gDisplayMode = 0;
