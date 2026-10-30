@@ -41,7 +41,11 @@ public:
     std::string ldFileName[6];                   //file names of the ldmodel talys calculations
     double pTable[6];                        //ptable parameter for each ldmodel
     double cTable[6];                      //ctable parameter for each ldmodel
-    double rhoScale = 1;                    //scaling factor for experimetnal level density
+    double rhoScale = 1;                    //scaling factor for experimental level density
+    double rhoScaleTrafo = 1.0;            //scaling factor for transformed level density
+    bool showNLDOriginal = true;           //display raw (untransformed) NLD
+    bool showNLDTransformed = false;       //display alpha-transformed NLD
+    bool showNLDDiscrete = true;           //overlay discrete levels on NLD plot
     
     double rhoChi2LowLimit = 2;
     double rhoChi2HighLimit = 2;

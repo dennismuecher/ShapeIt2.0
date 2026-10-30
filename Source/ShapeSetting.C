@@ -274,6 +274,10 @@ void ShapeSetting::SaveSettings() {
     outfile << "tripletPeakPos2 " << tripletPeakPos[1] <<"\n";
     outfile << "rhoFileName " << rhoFileName <<"\n";
     outfile << "rhoScale " << rhoScale <<"\n";
+    outfile << "rhoScaleTrafo " << rhoScaleTrafo <<"\n";
+    outfile << "showNLDOriginal " << showNLDOriginal <<"\n";
+    outfile << "showNLDTransformed " << showNLDTransformed <<"\n";
+    outfile << "showNLDDiscrete " << showNLDDiscrete <<"\n";
 
 
     outfile << "discreteLevelFile " << discreteLevelFile << " " << discreteBins << "\n";
@@ -405,7 +409,10 @@ void ShapeSetting::ReadSettings() {
             if (word == "tripletPeakPos2" ) isstr >> tripletPeakPos[1];
             if (word == "discreteLevelFile" ) { isstr >>discreteLevelFile; isstr >>discreteBins;}
             if (word == "rhoScale" ) isstr >> rhoScale ;
-
+            if (word == "rhoScaleTrafo" ) isstr >> rhoScaleTrafo ;
+            if (word == "showNLDOriginal" ) isstr >> showNLDOriginal ;
+            if (word == "showNLDTransformed" ) isstr >> showNLDTransformed ;
+            if (word == "showNLDDiscrete" ) isstr >> showNLDDiscrete ;
 
             if (word == "rhoFileName" ) {
                 getline(isstr, rhoFileName);

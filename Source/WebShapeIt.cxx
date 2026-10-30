@@ -410,10 +410,13 @@ void SendSettingsSync(unsigned connid)
     msg += std::to_string(sett->fixDoubletPeakPos[1] ? 1 : 0) + "|" + std::to_string(sett->doubletPeakPos[1]) + "|";
     msg += std::to_string(sett->fixTripletPeakPos[0] ? 1 : 0) + "|" + std::to_string(sett->tripletPeakPos[0]) + "|";
     msg += std::to_string(sett->fixTripletPeakPos[1] ? 1 : 0) + "|" + std::to_string(sett->tripletPeakPos[1]) + "|";
-    msg += std::to_string(sett->gsfPeakRef[0]) + "|" + std::to_string(sett->gsfPeakRef[1]);
-    
+    msg += std::to_string(sett->gsfPeakRef[0]) + "|" + std::to_string(sett->gsfPeakRef[1]) + "|";
+    msg += std::to_string(sett->rhoScale) + "|";                               // index 59
+    msg += std::to_string(sett->rhoScaleTrafo) + "|";                          // index 60
+    msg += std::to_string(sett->showNLDOriginal ? 1 : 0) + "|";               // index 61
+    msg += std::to_string(sett->showNLDTransformed ? 1 : 0) + "|";             // index 62
+    msg += std::to_string(sett->showNLDDiscrete ? 1 : 0);                      // index 63
 
-    
     window->Send(connid, msg);
 }
 
@@ -2095,6 +2098,21 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->doAutoScale = v[2] != 0.0;
         sett->eff_corr    = v[3];
     }
+    else if (starts_with(arg, "RHOSCALE:")) {
+        sett->rhoScale = std::stod(after_prefix(arg, "RHOSCALE:"));
+    }
+    else if (starts_with(arg, "RHOTRASCALE:")) {
+        sett->rhoScaleTrafo = std::stod(after_prefix(arg, "RHOTRASCALE:"));
+    }
+    else if (starts_with(arg, "SHOWNLDORIG:")) {
+        sett->showNLDOriginal = std::stoi(after_prefix(arg, "SHOWNLDORIG:")) != 0;
+    }
+    else if (starts_with(arg, "SHOWNLDTRAFO:")) {
+        sett->showNLDTransformed = std::stoi(after_prefix(arg, "SHOWNLDTRAFO:")) != 0;
+    }
+    else if (starts_with(arg, "SHOWNLDDISCRETE:")) {
+        sett->showNLDDiscrete = std::stoi(after_prefix(arg, "SHOWNLDDISCRETE:")) != 0;
+    }
     else if (starts_with(arg, "VERBOSE:")) {
         sett->verbose = std::stoi(after_prefix(arg, "VERBOSE:"));
     }
@@ -2530,27 +2548,122 @@ void ProcessData(unsigned connid, const std::string &arg)
             window->Send(connid, "No level density data in file: " + rhoPath);
             return;
         }
-        
+
+        bool showOrig  = sett->showNLDOriginal;
+        bool showTrafo = sett->showNLDTransformed;
+        if (!showOrig && !showTrafo) showOrig = true;  // always show at least one
+
+        // Compute transformed graph BEFORE deleting tempRho (Transform needs the object alive)
+        TGraphErrors *grTransformed = nullptr;
+        if (showTrafo) {
+            grTransformed = tempRho->Transform(1, sett->lit_alpha);
+            if (grTransformed) {
+                for (int i = 0; i < grTransformed->GetN(); i++) {
+                    grTransformed->GetX()[i]  /= 1000.0;
+                    grTransformed->GetY()[i]  *= 1000.0 * sett->rhoScaleTrafo;
+                    grTransformed->GetEY()[i] *= 1000.0 * sett->rhoScaleTrafo;
+                }
+                grTransformed->SetMarkerStyle(21);
+                grTransformed->SetMarkerSize(0.8);
+                grTransformed->SetMarkerColor(kOrange+1);
+                grTransformed->SetLineColor(kOrange+1);
+                grTransformed->SetTitle("Transformed NLD");
+            }
+        }
+
         delete tempRho;
-        
+
         grLevelDensity->SetMarkerStyle(20);
         grLevelDensity->SetMarkerSize(0.8);
         grLevelDensity->SetMarkerColor(kBlue);
         grLevelDensity->SetLineColor(kBlue);
-        grLevelDensity->SetTitle("Level Density");
-        
+        grLevelDensity->SetTitle("Original NLD");
+
+        // Convert original NLD from keV (ShapeRho internal units) to MeV for display
+        for (int i = 0; i < grLevelDensity->GetN(); i++) {
+            grLevelDensity->GetX()[i]  /= 1000.0;   // keV  → MeV
+            grLevelDensity->GetY()[i]  *= 1000.0;   // /keV → /MeV
+            grLevelDensity->GetEY()[i] *= 1000.0;
+        }
+
         gDisplayMode = 0;
         canvas->cd();
         canvas->Clear();
         for (int i = 0; i < 4; i++) { gMarkerLine[i] = nullptr; gDoubletLine[i] = nullptr; gBgBox[i] = nullptr; }
         gCurrentHist = nullptr;
-        
-        grLevelDensity->Draw("APE");
-        grLevelDensity->GetXaxis()->SetTitle("Excitation Energy (keV)");
-        grLevelDensity->GetYaxis()->SetTitle("Level Density (1/keV)");
-        
-        window->Send(connid, "Displaying level density: " + std::to_string(grLevelDensity->GetN()) + " points");
-        
+
+        // Try to build discrete levels overlay if file is loaded and toggle is on
+        TH1D* hDiscrete = nullptr;
+        if (sett->showNLDDiscrete && !sett->discreteLevelFile.empty() && !gSystem->AccessPathName(sett->discreteLevelFile.c_str())) {
+            std::ifstream dlFile(sett->discreteLevelFile.c_str());
+            if (dlFile.is_open()) {
+                std::vector<double> dlEnergies;
+                std::vector<double> dlStates;
+                double dlEx, dlN;
+                while (dlFile >> dlEx >> dlN) {
+                    dlEnergies.push_back(dlEx);
+                    dlStates.push_back(dlN);
+                }
+                dlFile.close();
+                if (!dlEnergies.empty()) {
+                    // Normalise to MeV: if max energy >= 50 the file is in keV, convert to MeV
+                    double dlMaxE = *std::max_element(dlEnergies.begin(), dlEnergies.end());
+                    if (dlMaxE >= 50.0)
+                        for (auto &e : dlEnergies) e /= 1000.0;
+                    // Bin width in MeV (sett->discreteBins is stored in keV)
+                    double dlBinWidth = sett->discreteBins / 1000.0;
+                    if (dlEnergies.size() > 1)
+                        dlBinWidth = dlEnergies[1] - dlEnergies[0];
+                    double dlEMin = dlEnergies.front() - dlBinWidth / 2.0;
+                    double dlEMax = dlEnergies.back() + dlBinWidth / 2.0;
+                    int dlNBins = (int)((dlEMax - dlEMin) / dlBinWidth + 0.5);
+                    delete gROOT->FindObject("hDiscrete");
+                    hDiscrete = new TH1D("hDiscrete", "Discrete Level Density", dlNBins, dlEMin, dlEMax);
+                    for (size_t k = 0; k < dlEnergies.size(); k++)
+                        hDiscrete->Fill(dlEnergies[k], dlStates[k] / dlBinWidth);
+                    hDiscrete->SetLineColor(kRed);
+                    hDiscrete->SetLineWidth(2);
+                    hDiscrete->SetFillColor(kRed);
+                    hDiscrete->SetFillStyle(3004);
+                }
+            }
+        }
+
+        // First graph uses "APE" to create axes; additional ones use "P SAME"
+        TGraphErrors *firstGraph = showOrig ? grLevelDensity : grTransformed;
+        firstGraph->Draw("APE");
+        firstGraph->GetXaxis()->SetTitle("Excitation Energy (MeV)");
+        firstGraph->GetYaxis()->SetTitle("Level Density (1/MeV)");
+        canvas->SetLogy();
+
+        if (showOrig && grLevelDensity != firstGraph)
+            grLevelDensity->Draw("P SAME");
+        if (showTrafo && grTransformed && grTransformed != firstGraph)
+            grTransformed->Draw("P SAME");
+
+        if (hDiscrete)
+            hDiscrete->Draw("HIST SAME");
+
+        // Legend if more than one dataset is visible
+        int nShown = (showOrig ? 1 : 0) + (showTrafo && grTransformed ? 1 : 0) + (hDiscrete ? 1 : 0);
+        if (nShown > 1) {
+            TLegend *ldLeg = new TLegend(0.55, 0.72, 0.88, 0.88);
+            ldLeg->SetBorderSize(1);
+            if (showOrig)
+                ldLeg->AddEntry(grLevelDensity, "Original NLD", "PE");
+            if (showTrafo && grTransformed)
+                ldLeg->AddEntry(grTransformed, Form("Transformed (#Delta#alpha=%.2f)", sett->lit_alpha), "PE");
+            if (hDiscrete)
+                ldLeg->AddEntry(hDiscrete, "Discrete levels", "L");
+            ldLeg->Draw();
+        }
+
+        std::string ldMsg = "Displaying level density";
+        if (showOrig)  ldMsg += ": " + std::to_string(grLevelDensity->GetN()) + " points";
+        if (showTrafo) ldMsg += " + transformed (alpha=" + std::to_string(sett->lit_alpha) + ")";
+        if (hDiscrete) ldMsg += " + discrete levels";
+        window->Send(connid, ldMsg);
+
         PushCanvasUpdate();
     }
     else if (arg == "SHOW_DISCRETE_LEVELS") {
@@ -2566,7 +2679,7 @@ void ProcessData(unsigned connid, const std::string &arg)
             return;
         }
         
-        // Read the discrete levels data file (2 column: Ex [keV], number_of_states)
+        // Read the discrete levels data file (2 column: Ex [keV or MeV], number_of_states)
         std::ifstream infile(sett->discreteLevelFile.c_str());
         if (!infile.is_open()) {
             window->Send(connid, "ERROR: Could not open discrete level file: " + sett->discreteLevelFile);
@@ -2588,27 +2701,28 @@ void ProcessData(unsigned connid, const std::string &arg)
             return;
         }
         
-        // Determine bin width from data spacing
-        double binWidth = sett->discreteBins;  // Default from settings
-        if (energies.size() > 1) {
-            // Use spacing between first two points as bin width
+        // Normalise to MeV: if max energy >= 50 the file is in keV, convert to MeV
+        double maxE = *std::max_element(energies.begin(), energies.end());
+        if (maxE >= 50.0)
+            for (auto &e : energies) e /= 1000.0;
+        
+        // Determine bin width from data spacing (in MeV)
+        double binWidth = sett->discreteBins / 1000.0;
+        if (energies.size() > 1)
             binWidth = energies[1] - energies[0];
-        }
         
         // Create histogram
         double eMin = energies.front() - binWidth/2.0;
         double eMax = energies.back() + binWidth/2.0;
         int nBins = (int)((eMax - eMin) / binWidth + 0.5);
         
-        TH1D* hDiscrete = new TH1D("hDiscrete", "Discrete Level Density;E_{x} [keV];#rho [keV^{-1}]", 
+        delete gROOT->FindObject("hDiscrete");
+        TH1D* hDiscrete = new TH1D("hDiscrete", "Discrete Level Density;E_{x} [MeV];#rho [MeV^{-1}]", 
                                     nBins, eMin, eMax);
         
-        // Fill histogram
-        for (size_t i = 0; i < energies.size(); i++) {
-            // Convert from number_of_states to level density (divide by bin width in keV)
-            double rho = states[i] / binWidth;
-            hDiscrete->Fill(energies[i], rho);
-        }
+        // Fill histogram: level density in /MeV, independent of bin width
+        for (size_t i = 0; i < energies.size(); i++)
+            hDiscrete->Fill(energies[i], states[i] / binWidth);
         
         // Draw on canvas
         gDisplayMode = 0;
@@ -2619,12 +2733,14 @@ void ProcessData(unsigned connid, const std::string &arg)
         
         hDiscrete->SetLineColor(kBlue);
         hDiscrete->SetLineWidth(2);
+        hDiscrete->SetFillColor(kBlue);
+        hDiscrete->SetFillStyle(3004);
         hDiscrete->Draw("HIST");
         canvas->SetLogy();
         
         std::ostringstream msg;
         msg << "Displayed discrete levels from: " << sett->discreteLevelFile 
-            << " (" << energies.size() << " bins, " << binWidth << " keV bin width)";
+            << " (" << energies.size() << " bins, " << binWidth << " MeV bin width)";
         window->Send(connid, msg.str());
         
         PushCanvasUpdate();
