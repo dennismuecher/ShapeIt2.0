@@ -1364,6 +1364,45 @@ static void DrawImportGsfCanvas(unsigned connid)
     }
 
     gPad->SetLogy(1);
+
+    // Compute chi²/n between imported data and the Oslo overlay, and display it.
+    // Only meaningful when both datasets are present and overlap in energy.
+    if (firstDrawn && gsfGraph && gsfGraph->GetN() > 0 && importLitGsf) {
+        TGraphErrors *litGraph = importLitGsf->GetLevGraph();
+        if (litGraph && litGraph->GetN() > 0) {
+            litGraph->Sort();   // ensure Eval() interpolates in the right direction
+            double osloXmin = litGraph->GetX()[0];
+            double osloXmax = litGraph->GetX()[litGraph->GetN() - 1];
+            if (osloXmin > osloXmax) std::swap(osloXmin, osloXmax);
+
+            double chi2 = 0;
+            int nchi = 0;
+            for (int i = 0; i < gsfGraph->GetN(); i++) {
+                double x = gsfGraph->GetX()[i];
+                if (x < osloXmin || x > osloXmax) continue;
+                double err = gsfGraph->GetEY()[i];
+                if (err <= 0) continue;
+                double diff = (gsfGraph->GetY()[i] - litGraph->Eval(x)) / err;
+                chi2 += diff * diff;
+                nchi++;
+            }
+
+            TPaveText *pt = new TPaveText(0.62, 0.13, 0.92, 0.23, "NDC");
+            pt->SetFillColor(0);
+            pt->SetFillStyle(1001);
+            pt->SetBorderSize(1);
+            pt->SetTextAlign(12);
+            pt->SetTextSize(0.026);
+            pt->AddText(Form("#Delta#alpha = %.3f MeV^{-1},  B = %.3f",
+                             sett->lit_alpha, sett->lit_norm));
+            if (nchi > 0)
+                pt->AddText(Form("#chi^{2}/n = %.2f  (n = %d)", chi2 / nchi, nchi));
+            else
+                pt->AddText("No overlap with Oslo range");
+            pt->Draw();
+        }
+    }
+
     gHaveLastRange = false;
     PushCanvasUpdate();
 }
