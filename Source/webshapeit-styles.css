@@ -822,3 +822,20 @@ html, body {
   background: #3a86ff;
   color: #fff;
 }
+/* === Tooltips === */
+#tooltip {
+  position: fixed;
+  background: #ddeeff;
+  color: #1a2e45;
+  border: 1px solid #a8c8e8;
+  padding: 5px 9px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 9999;
+  max-width: 240px;
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  display: none;
+}
+

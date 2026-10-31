@@ -66,45 +66,45 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
     <div class="menu">
       <button class="menu-label" data-menu="file">File</button>
       <div class="menu-dropdown" data-menu="file">
-        <button class="menu-item" id="btn-open">Open matrix...</button>
-        <button class="menu-item" id="btn-import-gsf">Import gSF data...</button>
+        <button class="menu-item" id="btn-open" data-tooltip="Open a ROOT matrix file (.root) for analysis">Open matrix...</button>
+        <button class="menu-item" id="btn-import-gsf" data-tooltip="Import pre-computed gSF data for display without loading a matrix">Import gSF data...</button>
         <div class="menu-divider"></div>
-        <button class="menu-item" id="btn-info">Info...</button>
+        <button class="menu-item" id="btn-info" data-tooltip="Show version information and contact details">Info...</button>
         <div class="menu-divider"></div>
-        <button class="menu-item" id="btn-exit">Exit</button>
+        <button class="menu-item" id="btn-exit" data-tooltip="Exit ShapeIt">Exit</button>
       </div>
     </div>
     <div class="menu">
       <button class="menu-label" data-menu="settings">Settings</button>
       <div class="menu-dropdown" data-menu="settings">
-        <button class="menu-item" id="btn-load-settings">Open settings...</button>
-        <button class="menu-item" id="btn-save-settings">Save settings</button>
-        <button class="menu-item" id="btn-save-settings-as">Save settings as...</button>
+        <button class="menu-item" id="btn-load-settings" data-tooltip="Load analysis parameters from a settings file">Open settings...</button>
+        <button class="menu-item" id="btn-save-settings" data-tooltip="Save current settings to the active settings file">Save settings</button>
+        <button class="menu-item" id="btn-save-settings-as" data-tooltip="Save current settings to a new file">Save settings as...</button>
         <div class="menu-divider"></div>
-        <button class="menu-item" id="btn-oslo">Load gSF literature (Oslo) data...</button>
-        <button class="menu-item" id="btn-rho">Load NLD literature (Oslo) data...</button>
-        <button class="menu-item" id="btn-discrete">Load discrete levels data...</button>
-        <button class="menu-item" id="btn-effi">Load eff-corr file...</button>
+        <button class="menu-item" id="btn-oslo" data-tooltip="Load Oslo-method gSF literature data to overlay on the gSF plot">Load gSF literature (Oslo) data...</button>
+        <button class="menu-item" id="btn-rho" data-tooltip="Load Oslo-method NLD literature data to overlay on the level density plot">Load NLD literature (Oslo) data...</button>
+        <button class="menu-item" id="btn-discrete" data-tooltip="Load discrete nuclear level data for NLD comparison">Load discrete levels data...</button>
+        <button class="menu-item" id="btn-effi" data-tooltip="Load energy-dependent efficiency correction data from file">Load eff-corr file...</button>
       </div>
     </div>
     <div class="menu">
       <button class="menu-label" data-menu="display">Display</button>
       <div class="menu-dropdown" data-menu="display">
-        <label class="menu-item toggle-item" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+        <label class="menu-item toggle-item" data-tooltip="Print detailed fit results for every excitation bin to the log" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
           <span>Verbose output</span>
           <input type="checkbox" id="verbose-toggle" style="margin: 0;">
         </label>
         <div class="menu-divider"></div>
-        <button class="menu-item" id="btn-show-width-calib">Width calibration...</button>
-        <button class="menu-item" id="btn-show-level-density">Show level density...</button>
-        <button class="menu-item" id="btn-show-settings-file">Show settings file...</button>
-        <button class="menu-item" id="btn-show-gsf-results">Show gSF results...</button>
+        <button class="menu-item" id="btn-show-width-calib" data-tooltip="Open the peak width calibration panel">Width calibration...</button>
+        <button class="menu-item" id="btn-show-level-density" data-tooltip="Plot the nuclear level density derived from current gSF results">Show level density...</button>
+        <button class="menu-item" id="btn-show-settings-file" data-tooltip="Display the raw contents of the current settings file">Show settings file...</button>
+        <button class="menu-item" id="btn-show-gsf-results" data-tooltip="Plot the computed γ-ray strength function">Show gSF results...</button>
       </div>
     </div>
     <div class="menu">
       <button class="menu-label" data-menu="transformation">Transformation</button>
       <div class="menu-dropdown" data-menu="transformation">
-        <button class="menu-item" id="btn-slope-correction">Slope correction...</button>
+        <button class="menu-item" id="btn-slope-correction" data-tooltip="Open the slope correction panel to apply an α transformation to gSF and NLD">Slope correction...</button>
       </div>
     </div>
     <div class="menu">
@@ -129,16 +129,16 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
     <!-- SIDEBAR - 4 tabs: Levels, Excitation & Bins, Projections, Options -->
     <div id="sidebar">
       <div id="sidebar-tabs">
-        <button class="tab-btn active" data-tab="levels">Levels</button>
-        <button class="tab-btn" data-tab="excitation">Excitation &amp; Bins</button>
-        <button class="tab-btn" data-tab="projections">Projections</button>
-        <button class="tab-btn" data-tab="options">Options</button>
+        <button class="tab-btn active" data-tab="levels" data-tooltip="Define fit energy windows and peak positions for Level 1 and Level 2">Levels</button>
+        <button class="tab-btn" data-tab="excitation" data-tooltip="Set excitation energy range, bin parameters, and efficiency correction">Excitation &amp; Bins</button>
+        <button class="tab-btn" data-tab="projections" data-tooltip="View the matrix and diagonal projection plots">Projections</button>
+        <button class="tab-btn" data-tab="options" data-tooltip="Select analysis mode and configure display and fitting options">Options</button>
       </div>
 
       <div id="import-mode-banner" style="display:none; margin: 8px 12px 0; padding: 6px 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; font-size: 12px; color: #856404;">
         Import mode — no matrix loaded
       </div>
-      <button class="btn-run" style="margin: 8px 12px 8px 12px; width: calc(100% - 24px); padding: 0; overflow: hidden; background: #fff; border: 1px solid #dde3ea; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
+      <button class="btn-run" data-tooltip="Run the ShapeIt analysis with current settings" style="margin: 8px 12px 8px 12px; width: calc(100% - 24px); padding: 0; overflow: hidden; background: #fff; border: 1px solid #dde3ea; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
         <img src="logo2.jpg" alt="ShapeIt!" class="btn-run-logo" id="btn-run-logo" style="width: 70%; display: block; margin: 4px auto;">
         <span id="btn-run-label" style="display: none; padding: 10px 16px;"></span>
       </button>
@@ -163,7 +163,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <div id="peak1L1-section" style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
             <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
               <span>Peak 1</span>
-              <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #555; cursor: pointer;">
+              <label data-tooltip="Select which peak in this level to use for gSF extraction" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #555; cursor: pointer;">
                 <input type="radio" name="gsfPeakL1" id="gsfPeak1L1" value="1" checked style="margin: 0;">
                 use for gSF
               </label>
@@ -175,7 +175,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
                 <span style="font-size: 12px;">keV</span>
               </div>
               <div style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" id="fixPeakPos1" style="margin: 0;">
+                <input type="checkbox" id="fixPeakPos1" data-tooltip="Fix this peak's centroid; it will not float during fitting" style="margin: 0;">
                 <label style="font-size: 12px; margin: 0;">Fix position</label>
               </div>
             </div>
@@ -185,10 +185,10 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <div id="peak2L1-section" style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; justify-content: space-between;">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" id="enablePeak2L1" style="margin: 0;">
+                <input type="checkbox" id="enablePeak2L1" data-tooltip="Enable a second peak in this fit region (doublet fit)" style="margin: 0;">
                 <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 2</div>
               </div>
-              <label id="gsfPeak2L1-label" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #999; cursor: not-allowed;">
+              <label id="gsfPeak2L1-label" data-tooltip="Select which peak in this level to use for gSF extraction" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #999; cursor: not-allowed;">
                 <input type="radio" name="gsfPeakL1" id="gsfPeak2L1" value="2" style="margin: 0;" disabled>
                 use for gSF
               </label>
@@ -201,7 +201,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
                   <span style="font-size: 12px;">keV</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <input type="checkbox" id="fixPeakPos2L1" style="margin: 0;">
+                  <input type="checkbox" id="fixPeakPos2L1" data-tooltip="Fix this peak's centroid; it will not float during fitting" style="margin: 0;">
                   <label style="font-size: 12px; margin: 0;">Fix position</label>
                 </div>
               </div>
@@ -212,10 +212,10 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <div id="peak3L1-section" style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #4a90e2;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; justify-content: space-between;">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" id="enablePeak3L1" style="margin: 0;">
+                <input type="checkbox" id="enablePeak3L1" data-tooltip="Enable a third peak in this fit region (triplet fit)" style="margin: 0;">
                 <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 3</div>
               </div>
-              <label id="gsfPeak3L1-label" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #999; cursor: not-allowed;">
+              <label id="gsfPeak3L1-label" data-tooltip="Select which peak in this level to use for gSF extraction" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #999; cursor: not-allowed;">
                 <input type="radio" name="gsfPeakL1" id="gsfPeak3L1" value="3" style="margin: 0;" disabled>
                 use for gSF
               </label>
@@ -228,7 +228,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
                   <span style="font-size: 12px;">keV</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <input type="checkbox" id="fixPeakPos3L1" style="margin: 0;">
+                  <input type="checkbox" id="fixPeakPos3L1" data-tooltip="Fix this peak's centroid; it will not float during fitting" style="margin: 0;">
                   <label style="font-size: 12px; margin: 0;">Fix position</label>
                 </div>
               </div>
@@ -236,7 +236,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           </div>
 
           <!-- Keep widths equal -->
-          <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px;">
+          <label data-tooltip="Constrain all peaks in this level to share the same Gaussian width" style="display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px;">
             <input type="checkbox" id="keepWidthsEqual1" checked style="margin: 0;" disabled>
             <span id="keepWidthsEqual1-label" style="color: #999;">Keep widths equal</span>
           </label>
@@ -255,7 +255,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <div id="peak1L2-section" style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
             <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
               <span>Peak 1</span>
-              <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #555; cursor: pointer;">
+              <label data-tooltip="Select which peak in this level to use for gSF extraction" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #555; cursor: pointer;">
                 <input type="radio" name="gsfPeakL2" id="gsfPeak1L2" value="1" checked style="margin: 0;">
                 use for gSF
               </label>
@@ -267,7 +267,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
                 <span style="font-size: 12px;">keV</span>
               </div>
               <div style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" id="fixPeakPos2" style="margin: 0;">
+                <input type="checkbox" id="fixPeakPos2" data-tooltip="Fix this peak's centroid; it will not float during fitting" style="margin: 0;">
                 <label style="font-size: 12px; margin: 0;">Fix position</label>
               </div>
             </div>
@@ -277,10 +277,10 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <div id="peak2L2-section" style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; justify-content: space-between;">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" id="enablePeak2L2" style="margin: 0;">
+                <input type="checkbox" id="enablePeak2L2" data-tooltip="Enable a second peak in this fit region (doublet fit)" style="margin: 0;">
                 <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 2</div>
               </div>
-              <label id="gsfPeak2L2-label" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #999; cursor: not-allowed;">
+              <label id="gsfPeak2L2-label" data-tooltip="Select which peak in this level to use for gSF extraction" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #999; cursor: not-allowed;">
                 <input type="radio" name="gsfPeakL2" id="gsfPeak2L2" value="2" style="margin: 0;" disabled>
                 use for gSF
               </label>
@@ -293,7 +293,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
                   <span style="font-size: 12px;">keV</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <input type="checkbox" id="fixPeakPos2L2" style="margin: 0;">
+                  <input type="checkbox" id="fixPeakPos2L2" data-tooltip="Fix this peak's centroid; it will not float during fitting" style="margin: 0;">
                   <label style="font-size: 12px; margin: 0;">Fix position</label>
                 </div>
               </div>
@@ -304,10 +304,10 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <div id="peak3L2-section" style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #e27d4a;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; justify-content: space-between;">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" id="enablePeak3L2" style="margin: 0;">
+                <input type="checkbox" id="enablePeak3L2" data-tooltip="Enable a third peak in this fit region (triplet fit)" style="margin: 0;">
                 <div style="font-size: 12px; font-weight: 600; color: #333;">Peak 3</div>
               </div>
-              <label id="gsfPeak3L2-label" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #999; cursor: not-allowed;">
+              <label id="gsfPeak3L2-label" data-tooltip="Select which peak in this level to use for gSF extraction" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; color: #999; cursor: not-allowed;">
                 <input type="radio" name="gsfPeakL2" id="gsfPeak3L2" value="3" style="margin: 0;" disabled>
                 use for gSF
               </label>
@@ -320,7 +320,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
                   <span style="font-size: 12px;">keV</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <input type="checkbox" id="fixPeakPos3L2" style="margin: 0;">
+                  <input type="checkbox" id="fixPeakPos3L2" data-tooltip="Fix this peak's centroid; it will not float during fitting" style="margin: 0;">
                   <label style="font-size: 12px; margin: 0;">Fix position</label>
                 </div>
               </div>
@@ -328,7 +328,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           </div>
 
           <!-- Keep widths equal -->
-          <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px;">
+          <label data-tooltip="Constrain all peaks in this level to share the same Gaussian width" style="display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px;">
             <input type="checkbox" id="keepWidthsEqual2" checked style="margin: 0;" disabled>
             <span id="keepWidthsEqual2-label" style="color: #999;">Keep widths equal</span>
           </label>
@@ -384,7 +384,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
             <span>to</span>
             <input type="number" id="binsize-hi" value="400" disabled>
           </div>
-          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 14px;">
+          <label data-tooltip="Allow different bin sizes for the low and high excitation ranges" style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 14px;">
             <input type="checkbox" id="bin-variation"> Bin size variation
           </label>
 
@@ -401,7 +401,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <p style="font-size: 13px; color: #555; margin: 0 0 6px;">gSF scaling</p>
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
             <input type="number" id="gsf-scaling" value="1" style="width: 100px;">
-            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;">
+            <label data-tooltip="Automatically compute the gSF scaling factor from the data" style="display: flex; align-items: center; gap: 6px; font-size: 12px;">
               <input type="checkbox" id="auto-scale"> Auto
             </label>
           </div>
@@ -410,14 +410,14 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
             <input type="number" id="eff-corr" value="1" style="width: 100px;">
           </div>
-          <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;" id="effi-file-label">
+          <label data-tooltip="Apply energy-dependent efficiency correction from the loaded file (load file via Settings menu)" style="display: flex; align-items: center; gap: 6px; font-size: 12px;" id="effi-file-label">
             <input type="checkbox" id="use-effi-file" style="margin: 0;" disabled>
             <span id="effi-file-text" style="color: #999;">Use energy-dependent file</span>
           </label>
           <div id="effi-filename-display" style="font-size: 11px; color: #666; margin-top: 4px; display: none;"></div>
 
           <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
-            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+            <label data-tooltip="Disable downsampling for matrix display — may be slow for large matrices" style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
               <input type="checkbox" id="full-res-matrix" style="margin: 0;">
               <span>Display at full resolution</span>
             </label>
@@ -431,11 +431,11 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
         <div id="panel-projections" style="display: none;">
           <h3>Projections</h3>
 
-          <button class="proj-btn" id="btn-show-matrix">Matrix</button>
-          <button class="proj-btn" id="btn-show-proj">Diagonal projection (sum)</button>
+          <button class="proj-btn" id="btn-show-matrix" data-tooltip="Display the full 2D coincidence matrix in the canvas">Matrix</button>
+          <button class="proj-btn" id="btn-show-proj" data-tooltip="Display the diagonal projection — summed spectrum across all excitation bins">Diagonal projection (sum)</button>
 
           <p style="font-size: 13px; color: #555; margin: 14px 0 6px;">Projection of bin</p>
-          <select id="bin-select" style="width: 100%; padding: 6px; box-sizing: border-box;" disabled></select>
+          <select id="bin-select" data-tooltip="Select an excitation bin to view its individual projection" style="width: 100%; padding: 6px; box-sizing: border-box;" disabled></select>
         </div>
 
         <!-- TAB 4: Options - Matrix selection, mode, analysis options, display settings -->
@@ -443,30 +443,30 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <h3>Options</h3>
 
           <p style="font-size: 13px; color: #555; margin: 0 0 6px;">Matrix</p>
-          <select id="matrix-select" style="width: 100%; padding: 6px; box-sizing: border-box; margin-bottom: 16px;"></select>
+          <select id="matrix-select" data-tooltip="Choose which loaded matrix to analyze" style="width: 100%; padding: 6px; box-sizing: border-box; margin-bottom: 16px;"></select>
 
           <p style="font-size: 13px; color: #555; margin: 0 0 6px;">Mode</p>
-          <label class="mode-radio-row">
+          <label class="mode-radio-row" data-tooltip="Sum bin counts directly in the fit region without fitting peak shapes">
             <input type="radio" name="mode-radio" id="mode-integration" value="1" checked> Integration
           </label>
-          <label class="mode-radio-row" style="margin-bottom: 16px;">
+          <label class="mode-radio-row" data-tooltip="Fit each peak with a Gaussian function to extract peak areas" style="margin-bottom: 16px;">
             <input type="radio" name="mode-radio" id="mode-autofit" value="2"> Autofit
           </label>
 
           <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+            <label data-tooltip="Interpolate matrix values at sewing points to smooth transitions between excitation bins" style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
               <input type="checkbox" id="opt-interpol" checked> Sewing interpolation
             </label>
-            <label id="opt-oslo-label" style="display: flex; align-items: center; gap: 8px; font-size: 13px; opacity: 0.5;" title="Load a gSF literature data file first (Settings -> Load gSF literature (Oslo) data...)">
+            <label id="opt-oslo-label" data-tooltip="Overlay Oslo-method gSF literature expectation on the plot (load file via Settings menu first)" style="display: flex; align-items: center; gap: 8px; font-size: 13px; opacity: 0.5;" title="Load a gSF literature data file first (Settings -> Load gSF literature (Oslo) data...)">
               <input type="checkbox" id="opt-oslo" disabled> Display expectation
             </label>
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+            <label data-tooltip="Average results over ±1 bin shifts of the lower excitation boundary" style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
               <input type="checkbox" id="opt-sliding"> Sliding window variation
             </label>
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+            <label data-tooltip="Subtract a linear background estimated from the defined background regions" style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
               <input type="checkbox" id="opt-background"> Background subtraction
             </label>
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;" id="width-calib-label">
+            <label data-tooltip="Use the width-vs-energy calibration to constrain peak widths in autofit mode" style="display: flex; align-items: center; gap: 8px; font-size: 13px;" id="width-calib-label">
               <input type="checkbox" id="opt-width-calib"> Use width calibration for autofit
             </label>
             <p style="font-size: 12px; color: #666; margin: 0 0 0 26px; line-height: 1.3;">Fit peak widths vs energy to guide autofits (requires autofit mode + existing calibration data)</p>
@@ -475,18 +475,18 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <div style="margin: 20px 0 16px; padding: 12px; border: 2px solid #4a90e2; border-radius: 6px; background: #f8fbff;">
             <p style="font-size: 14px; font-weight: 600; color: #2c3e50; margin: 0 0 12px; border-bottom: 1px solid #4a90e2; padding-bottom: 6px;">Display Options</p>
             
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px;">
+            <label data-tooltip="Display individual gSF data points from each excitation bin" style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px;">
               <input type="checkbox" id="opt-display-single" checked> Show individual data points
             </label>
             <p style="font-size: 11px; color: #666; margin: 0 0 12px 26px; line-height: 1.3;">Display individual gSF data points from each peak</p>
             
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px;">
+            <label data-tooltip="Show a smoothed average of the gSF data points" style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px;">
               <input type="checkbox" id="opt-display-avg"> Show average values
             </label>
             <p style="font-size: 11px; color: #666; margin: 0 0 12px 26px; line-height: 1.3;">Display smoothed/averaged gSF data</p>
             
             <div style="padding-top: 8px; border-top: 1px solid #d0d0d0;">
-              <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px;">
+              <label data-tooltip="Color-code individual data points by peak number (Peak 1 vs Peak 2)" style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px;">
                 <input type="checkbox" id="opt-colour" checked> Different colors for peaks
               </label>
               <p style="font-size: 11px; color: #666; margin: 0 0 0 26px; line-height: 1.3;">Plot Peak 1 and Peak 2 in different colors (individual points only)</p>
@@ -498,11 +498,11 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
         <div id="panel-width-calib" style="display: none;">
           <h3>Width Calibration</h3>
 
-          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 10px;" id="width-calib-label-2">
+          <label data-tooltip="Use the width-vs-energy calibration to constrain peak widths in autofit mode" style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 10px;" id="width-calib-label-2">
             <input type="checkbox" id="opt-width-calib-2"> Use width calibration for autofit
           </label>
 
-          <button id="btn-refresh-autofits" style="width: 100%; padding: 10px; margin-bottom: 16px; background: #1e2a38; color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;">
+          <button id="btn-refresh-autofits" data-tooltip="Re-run all autofit calculations using the current width calibration parameters" style="width: 100%; padding: 10px; margin-bottom: 16px; background: #1e2a38; color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;">
             Refresh Autofits
           </button>
 
@@ -510,7 +510,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
             Linear fit: width = offset + slope × E<sub>γ</sub>
           </p>
 
-          <button id="btn-refresh-width-fits" style="width: 100%; padding: 10px; margin-bottom: 16px; background: #3a86ff; color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;">
+          <button id="btn-refresh-width-fits" data-tooltip="Fit peak width vs energy data to derive new calibration slope and offset" style="width: 100%; padding: 10px; margin-bottom: 16px; background: #3a86ff; color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;">
             Refresh Fits from Data
           </button>
 
@@ -553,12 +553,12 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <div style="margin-bottom: 20px;">
             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
               <label style="font-size: 12px; width: 80px;">Slope Δα:</label>
-              <input type="number" id="alpha-slope" value="0" step="0.01" style="width: 100px; padding: 4px;">
+              <input type="number" id="alpha-slope" data-tooltip="Slope correction Δα [1/MeV] — shifts the slopes of both gSF and NLD simultaneously" value="0" step="0.01" style="width: 100px; padding: 4px;">
               <span style="font-size: 12px;">[1/MeV]</span>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
               <label style="font-size: 12px; width: 80px;">Error &delta;(Δα):</label>
-              <input type="number" id="alpha-error" value="0" step="0.01" min="0" style="width: 100px; padding: 4px;">
+              <input type="number" id="alpha-error" data-tooltip="Uncertainty δ(Δα) — used to compute error bands on the transformed NLD" value="0" step="0.01" min="0" style="width: 100px; padding: 4px;">
               <span style="font-size: 12px;">[1/MeV]</span>
             </div>
             <p style="font-size: 11px; color: #666; margin: 0 0 0 0; line-height: 1.3;">
@@ -570,7 +570,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <div style="margin-bottom: 20px;">
             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
               <label style="font-size: 12px; width: 80px;">gSF scale B:</label>
-              <input type="number" id="lit-norm" value="1" step="0.01" style="width: 100px; padding: 4px;">
+              <input type="number" id="lit-norm" data-tooltip="Normalization factor B applied to the literature gSF values before comparison" value="1" step="0.01" style="width: 100px; padding: 4px;">
             </div>
             <p style="font-size: 11px; color: #666; margin: 0 0 0 0; line-height: 1.3;">
               Scaling factor for literature gSF values.
@@ -581,19 +581,19 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <div style="margin-bottom: 20px;">
             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
               <label style="font-size: 12px; width: 80px;">Iterations:</label>
-              <input type="number" id="mc-iterations" value="100" min="10" max="1000" style="width: 100px; padding: 4px;">
+              <input type="number" id="mc-iterations" data-tooltip="Number of Monte Carlo iterations for the Δα search (more iterations = more accurate but slower)" value="100" min="10" max="1000" style="width: 100px; padding: 4px;">
             </div>
             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
               <label style="font-size: 12px; width: 80px;">Ex low min:</label>
-              <input type="number" id="mc-exi-min" value="3000" step="100" style="width: 100px; padding: 4px;">
+              <input type="number" id="mc-exi-min" data-tooltip="Minimum lower excitation boundary to explore in the Monte Carlo search [keV]" value="3000" step="100" style="width: 100px; padding: 4px;">
               <span style="font-size: 11px;">keV</span>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
               <label style="font-size: 12px; width: 80px;">Ex low max:</label>
-              <input type="number" id="mc-exi-max" value="5000" step="100" style="width: 100px; padding: 4px;">
+              <input type="number" id="mc-exi-max" data-tooltip="Maximum lower excitation boundary to explore in the Monte Carlo search [keV]" value="5000" step="100" style="width: 100px; padding: 4px;">
               <span style="font-size: 11px;">keV</span>
             </div>
-            <button id="btn-run-mc" style="width: 100%; padding: 8px; background: #ff9800; color: white; border: none; border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer;">
+            <button id="btn-run-mc" data-tooltip="Run Monte Carlo search to find the optimal slope correction Δα that best matches literature gSF data" style="width: 100%; padding: 8px; background: #ff9800; color: white; border: none; border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer;">
               Find Best Δα
             </button>
             <p style="font-size: 11px; color: #666; margin: 10px 0 0 0; line-height: 1.3;">
@@ -613,29 +613,29 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <div class="section-label"><span>Original NLD</span></div>
           <div style="margin-bottom: 16px;">
             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
-              <input type="checkbox" id="show-nld-orig" checked style="margin: 0; cursor: pointer;">
+              <input type="checkbox" id="show-nld-orig" data-tooltip="Show the original (untransformed) NLD from the Oslo-method fit" checked style="margin: 0; cursor: pointer;">
               <label for="show-nld-orig" style="font-size: 12px; cursor: pointer;">Show</label>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; margin-left: 20px;">
               <label style="font-size: 12px; width: 50px; color: #444;">Scale:</label>
-              <input type="number" id="rho-scale" value="1" step="0.01" min="0.01" style="width: 90px; padding: 4px;">
+              <input type="number" id="rho-scale" data-tooltip="Vertical scaling factor applied to the original NLD curve" value="1" step="0.01" min="0.01" style="width: 90px; padding: 4px;">
             </div>
           </div>
 
           <div class="section-label"><span>Transformed NLD</span></div>
           <div style="margin-bottom: 16px;">
             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
-              <input type="checkbox" id="show-nld-trafo" style="margin: 0; cursor: pointer;">
+              <input type="checkbox" id="show-nld-trafo" data-tooltip="Show the α-transformed NLD with its error band" style="margin: 0; cursor: pointer;">
               <label for="show-nld-trafo" style="font-size: 12px; cursor: pointer;">Show</label>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; margin-left: 20px; margin-bottom: 6px;">
               <label style="font-size: 12px; width: 50px; color: #444;">&Delta;&alpha;:</label>
-              <input type="number" id="rho-d-alpha" value="0" step="0.01" style="width: 90px; padding: 4px;">
+              <input type="number" id="rho-d-alpha" data-tooltip="Δα for the NLD slope transformation [1/MeV]" value="0" step="0.01" style="width: 90px; padding: 4px;">
               <span style="font-size: 11px; color: #666;">[1/MeV]</span>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; margin-left: 20px; margin-bottom: 4px;">
               <label style="font-size: 12px; width: 50px; color: #444;">&delta;(Δα):</label>
-              <input type="number" id="rho-d-alpha-err" value="0" step="0.01" min="0" style="width: 90px; padding: 4px;">
+              <input type="number" id="rho-d-alpha-err" data-tooltip="Uncertainty δ(Δα) — controls the width of the transformed NLD error band [1/MeV]" value="0" step="0.01" min="0" style="width: 90px; padding: 4px;">
               <span style="font-size: 11px; color: #666;">[1/MeV]</span>
             </div>
             <div style="margin-left: 20px; margin-top: 2px;">
@@ -646,7 +646,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           <div class="section-label"><span>Discrete Levels</span></div>
           <div style="margin-bottom: 16px;">
             <div style="display: flex; gap: 8px; align-items: center;">
-              <input type="checkbox" id="show-nld-discrete" checked style="margin: 0; cursor: pointer;">
+              <input type="checkbox" id="show-nld-discrete" data-tooltip="Overlay discrete nuclear levels on the NLD plot" checked style="margin: 0; cursor: pointer;">
               <label for="show-nld-discrete" style="font-size: 12px; cursor: pointer;">Show overlay</label>
             </div>
           </div>
@@ -664,7 +664,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
     <div id="logpanel-header">
       <span style="flex: 1;">Messages</span>
       <span id="status-logpanel" style="margin-right: 12px; color: #9ab;">Connecting...</span>
-      <button id="btn-close-log">Clear</button>
+      <button id="btn-close-log" data-tooltip="Clear all messages from the log panel">Clear</button>
     </div>
     <div id="logpanel-content"></div>
   </div>
@@ -2653,6 +2653,35 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
       conn_handle.send('RUN:' + msg);
       setStatus('Running...');
   });
+
+  // Tooltip system — add data-tooltip="..." to any element to show a hint on hover
+  (function() {
+    const tip = document.getElementById('tooltip');
+    let timer = null;
+    document.addEventListener('mouseover', e => {
+      const t = e.target.closest('[data-tooltip]');
+      if (t) {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          tip.textContent = t.dataset.tooltip;
+          tip.style.display = 'block';
+        }, 600);
+      }
+    });
+    document.addEventListener('mouseout', e => {
+      if (e.target.closest('[data-tooltip]')) {
+        clearTimeout(timer);
+        tip.style.display = 'none';
+      }
+    });
+    document.addEventListener('mousemove', e => {
+      if (tip.style.display === 'block') {
+        tip.style.left = (e.clientX + 14) + 'px';
+        tip.style.top  = (e.clientY + 18) + 'px';
+      }
+    });
+  })();
 </script>
+<div id="tooltip"></div>
 </body>
 </html>
