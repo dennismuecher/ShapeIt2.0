@@ -39,6 +39,7 @@ public:
     std::string importGsfFileName = "";           //name of file containing externally imported gSF data (energy, gSF, error)
     bool importGsfMode = false;                   //if true, gSF is loaded from importGsfFileName instead of matrix analysis
     std::string settFileName = "";                  //name of settings save file
+    std::string notepadText = "";                   //user notes stored with settings
     std::string discreteLevelFile = "";             //name of discrete level density file 
     std::string ldFileName[6];                   //file names of the ldmodel talys calculations
     double pTable[6];                        //ptable parameter for each ldmodel

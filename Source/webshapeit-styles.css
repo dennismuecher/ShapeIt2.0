@@ -51,6 +51,19 @@ html, body {
   background: #3a4a5c;
 }
 
+.menu-action {
+  padding: 8px 14px;
+  font-size: 13px;
+  border: none;
+  background: transparent;
+  color: #eee;
+  cursor: pointer;
+}
+
+.menu-action:hover {
+  background: #3a4a5c;
+}
+
 .menu-dropdown {
   display: none;
   position: absolute;

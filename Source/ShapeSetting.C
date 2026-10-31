@@ -281,6 +281,13 @@ void ShapeSetting::SaveSettings() {
     outfile << "showNLDDiscrete " << showNLDDiscrete <<"\n";
     outfile << "fullResDisplay " << fullResDisplay <<"\n";
 
+    if (!notepadText.empty()) {
+        outfile << "notepad_begin\n";
+        outfile << notepadText;
+        if (notepadText.back() != '\n') outfile << '\n';
+        outfile << "notepad_end\n";
+    }
+
     outfile << "discreteLevelFile " << discreteLevelFile << " " << discreteBins << "\n";
     
     for (int i = 0; i < 6; i++) {
@@ -428,6 +435,17 @@ void ShapeSetting::ReadSettings() {
                 TrimCR(importGsfFileName);
             }
             if (word == "importGsfMode" ) isstr >> importGsfMode;
+            if (word == "notepad_begin") {
+                notepadText.clear();
+                std::string ntLine;
+                while (std::getline(inp, ntLine)) {
+                    TrimCR(ntLine);
+                    if (ntLine == "notepad_end") break;
+                    notepadText += ntLine + "\n";
+                }
+                if (!notepadText.empty() && notepadText.back() == '\n')
+                    notepadText.pop_back();
+            }
             for (int i = 0; i < 6; i++) {
                 std::string ldname = "ldmodel"+to_string(i+1);
                 if (word == ldname) {

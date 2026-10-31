@@ -8,13 +8,13 @@ Browser frontend for the ShapeIt nuclear physics analysis tool. Communicates
 with the C++ backend (WebShapeIt.cxx) via WebSocket; JSROOT renders ROOT objects.
 
 UI STRUCTURE:
-  - Menu bar: File, Settings, Display, Transformation menus + settings filename
+  - Menu bar: File, Settings, Display, Transformation, Help menus + Notepad button + settings filename
   - Sidebar: 4 main tabs (Levels, Excitation & Bins, Projections, Options) plus
     two hidden panels shown via menu: Width Calibration, Slope Correction
   - Main canvas: JSROOT visualization (matrix, projections, gSF results, MC plots)
   - Log panel: timestamped status messages, resizable via drag handle
   - Modals: file browser, unsaved-changes exit dialog, settings format upgrade
-    dialog, settings file viewer, unit conversion warning (MeV → keV)
+    dialog, settings file viewer, notepad, unit conversion warning (MeV → keV)
 
 FEATURES:
   - Integration and Autofit modes; single/doublet/triplet peaks per level
@@ -114,6 +114,9 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
       <div class="menu-dropdown" data-menu="help">
         <button class="menu-item" id="btn-help">Help...</button>
       </div>
+    </div>
+    <div class="menu">
+      <button class="menu-action" id="btn-notepad" data-tooltip="Open the notepad to write and save analysis notes">Notepad</button>
     </div>
     <div id="settings-info">
       <span id="settings-path">No settings file</span>
@@ -772,6 +775,30 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
     <pre id="settings-viewer-content" style="flex: 1; overflow-y: auto; margin: 0 0 16px; padding: 12px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 12px; line-height: 1.4; white-space: pre-wrap;"></pre>
     <div style="display: flex; gap: 10px; justify-content: flex-end;">
       <button id="settings-viewer-close" style="padding: 8px 16px; font-size: 13px; border: none; border-radius: 4px; background: #3a86ff; color: #fff; cursor: pointer;">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     NOTEPAD MODAL - Text editor for analysis notes, saved to settings file
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="notepad-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; z-index: 1005;">
+  <div style="background: #fff; width: 640px; height: 500px; border-radius: 8px; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; box-shadow: 0 4px 24px rgba(0,0,0,0.3);">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+      <h3 style="margin: 0; font-size: 16px; color: #1e2a38;">Notepad</h3>
+      <span id="notepad-status" style="font-size: 12px; color: #3a86ff; font-weight: 500;"></span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+      <button id="notepad-timestamp" style="padding: 4px 10px; font-size: 12px; border: 1px solid #dde3ea; border-radius: 4px; background: #f5f7fa; color: #444; cursor: pointer;" data-tooltip="Insert current date and time at cursor">+ Timestamp</button>
+      <span id="notepad-kb-hint" style="font-size: 11px; color: #aaa;"></span>
+    </div>
+    <textarea id="notepad-text" spellcheck="true"
+      style="flex: 1; resize: none; border: 1px solid #dde3ea; border-radius: 4px; padding: 10px 12px; font-family: -apple-system, 'Menlo', monospace; font-size: 13px; line-height: 1.6; outline: none; color: #222; background: #fafbfc;"
+      placeholder="Write your analysis notes here... These notes are saved alongside the settings file."></textarea>
+    <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
+      <span style="flex: 1; font-size: 11px; color: #aaa;">Saved to the active settings file. Open a settings file first to persist notes to disk.</span>
+      <button id="notepad-save" style="padding: 8px 22px; font-size: 13px; border: none; border-radius: 4px; background: #3a86ff; color: #fff; cursor: pointer; font-weight: 500;">Save</button>
+      <button id="notepad-close" style="padding: 8px 16px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; background: #fff; color: #333; cursor: pointer;">Close</button>
     </div>
   </div>
 </div>
@@ -1858,6 +1885,25 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           setStatus('Monte Carlo complete: Best α = ' + bestAlpha.toFixed(3) + ', χ² = ' + bestChi2.toFixed(2) + ' (will be applied on next ShapeIt run)');
         }
         
+        // Notepad text from backend (sent after settings load)
+        else if (msg.startsWith('NOTEPAD_TEXT:')) {
+          const encoded = msg.slice(13);
+          // Decode literal \n sequences back to real newlines
+          document.getElementById('notepad-text').value = encoded.replace(/\\n/g, '\n');
+          document.getElementById('notepad-status').textContent = '';
+        }
+
+        // Notepad save confirmation
+        else if (msg === 'Notepad saved.') {
+          document.getElementById('notepad-status').textContent = 'Saved ✓';
+          setStatus(msg);
+        }
+
+        else if (msg === 'Notepad stored (save settings to persist to disk).') {
+          document.getElementById('notepad-status').textContent = 'Stored (no file yet)';
+          setStatus(msg);
+        }
+
         // Generic status message
         else {
           setStatus(msg);
@@ -2678,6 +2724,66 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
       setStatus('Running...');
   });
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // NOTEPAD - Text editor saved to settings file
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  function showNotepad() {
+    closeAllMenus();
+    document.getElementById('notepad-overlay').style.display = 'flex';
+    document.getElementById('notepad-text').focus();
+    document.getElementById('notepad-status').textContent = '';
+  }
+
+  function hideNotepad() {
+    document.getElementById('notepad-overlay').style.display = 'none';
+  }
+
+  document.getElementById('btn-notepad').addEventListener('click', showNotepad);
+
+  // Show platform-appropriate keyboard shortcut hint
+  const isMac = /Mac|iPhone|iPod|iPad/.test(navigator.platform);
+  document.getElementById('notepad-kb-hint').textContent = isMac
+    ? 'Cmd+Z to undo · Cmd+Shift+Z to redo'
+    : 'Ctrl+Z to undo · Ctrl+Y to redo';
+
+  document.getElementById('notepad-save').addEventListener('click', () => {
+    if (!conn_handle) return;
+    const text = document.getElementById('notepad-text').value;
+    // Encode newlines as literal \n for single-line WebSocket frame
+    const encoded = text.replace(/\\/g, '\\\\').replace(/\n/g, '\\n');
+    conn_handle.send('SAVE_NOTEPAD:' + encoded);
+    document.getElementById('notepad-status').textContent = 'Saving...';
+  });
+
+  document.getElementById('notepad-close').addEventListener('click', hideNotepad);
+
+  // Close notepad on overlay backdrop click
+  document.getElementById('notepad-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('notepad-overlay')) hideNotepad();
+  });
+
+  // Insert a timestamp at the current cursor position
+  document.getElementById('notepad-timestamp').addEventListener('click', () => {
+    const ta = document.getElementById('notepad-text');
+    const now = new Date();
+    // Format: "--- 2026-10-31 14:23:05 ---"
+    const pad = n => String(n).padStart(2, '0');
+    const stamp = `\n--- ${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} `
+                + `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ---\n`;
+    const start = ta.selectionStart;
+    const end   = ta.selectionEnd;
+    ta.value = ta.value.slice(0, start) + stamp + ta.value.slice(end);
+    const newPos = start + stamp.length;
+    ta.setSelectionRange(newPos, newPos);
+    ta.focus();
+  });
+
+
+  // Update status label when backend confirms save
+  // (handled via the generic setStatus path — "Notepad saved." appears in the log)
+
+  // ═══════════════════════════════════════════════════════════════════════════════
   // Tooltip system — add data-tooltip="..." to any element to show a hint on hover
   (function() {
     const tip = document.getElementById('tooltip');

@@ -448,6 +448,19 @@ void SendSettingsSync(unsigned connid)
     window->Send(connid, msg);
 }
 
+// Sends notepad text to the browser. Newlines are encoded as literal \n so the
+// single-line WebSocket frame stays intact; the frontend decodes them back.
+void SendNotepadText(unsigned connid)
+{
+    std::string encoded;
+    for (char c : sett->notepadText) {
+        if (c == '\n')      encoded += "\\n";
+        else if (c == '\r') continue;
+        else                encoded += c;
+    }
+    window->Send(connid, "NOTEPAD_TEXT:" + encoded);
+}
+
 // Draws the Level 1/2 marker lines and background region boxes on whatever
 // projection is currently displayed -- mirrors ShapeFrame::DrawMarker().
 // Only meaningful in display modes 4 (summed projection) and 5 (per-bin
@@ -2144,6 +2157,7 @@ void ProcessData(unsigned connid, const std::string &arg)
         
         // Sync all settings to UI (this updates all form fields to match loaded settings)
         SendSettingsSync(connid);
+        SendNotepadText(connid);
 
         // Enable "Display expectation" if the settings reference a valid gSF literature file.
         // This must be sent after SendSettingsSync so the frontend can enable the checkbox.
@@ -2425,6 +2439,7 @@ void ProcessData(unsigned connid, const std::string &arg)
         }
 
         SendSettingsSync(connid);
+        SendNotepadText(connid);
         // Enable "Display expectation" only if the loaded settings reference a
         // valid gSF literature file; otherwise keep it greyed out.
         bool osloOk = !sett->osloFileName.empty() &&
@@ -2440,6 +2455,26 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->settFileName = path;
         sett->SaveSettings();
         window->Send(connid, "Settings saved: " + path);
+    }
+    else if (starts_with(arg, "SAVE_NOTEPAD:")) {
+        std::string encoded = after_prefix(arg, "SAVE_NOTEPAD:");
+        // Decode literal \n sequences back to real newlines
+        std::string decoded;
+        for (size_t i = 0; i < encoded.size(); i++) {
+            if (encoded[i] == '\\' && i + 1 < encoded.size() && encoded[i+1] == 'n') {
+                decoded += '\n';
+                i++;
+            } else {
+                decoded += encoded[i];
+            }
+        }
+        sett->notepadText = decoded;
+        if (!sett->settFileName.empty()) {
+            sett->SaveSettings();
+            window->Send(connid, "Notepad saved.");
+        } else {
+            window->Send(connid, "Notepad stored (save settings to persist to disk).");
+        }
     }
     else if (starts_with(arg, "OPTIONS:")) {
         // order: doInterpol|doOslo|doSlidingWindow|doBackground|doWidthCal
