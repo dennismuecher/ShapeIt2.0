@@ -1,6 +1,6 @@
 // WebShapeIt.cxx
 //
-// C++ backend for the ShapeIt 2.0 web interface. Serves the browser frontend
+// C++ backend for the ShapeIt 2.1 web interface. Serves the browser frontend
 // via ROOT's RWebWindow/WebSocket and handles all analysis logic.
 //
 // Run from ShapeIt2.0/Source/:  root WebShapeIt.cxx
@@ -4295,7 +4295,7 @@ void WebShapeIt()
 {
     // Check for help flag first
     if (GetCmdLineArg("--help") == "--help" || GetCmdLineArg("-h") == "-h") {
-        std::cout << "\nWebShapeIt 2.0 - Usage:\n"
+        std::cout << "\nWebShapeIt 2.1 - Usage:\n"
                   << "  root -l WebShapeIt.cxx\n"
                   << "  SHAPEIT_SETTINGS=<path> root -l WebShapeIt.cxx\n\n"
                   << "Options:\n"
@@ -4394,7 +4394,7 @@ void WebShapeIt()
         // No environment variable set - start with empty settings (no output needed)
     }
 
-    canvas = TWebCanvas::CreateWebCanvas("webshapeit_canvas", "ShapeIt 2.0");
+    canvas = TWebCanvas::CreateWebCanvas("webshapeit_canvas", "ShapeIt 2.1");
     
     // Enable crosshair and coordinate display - shows x,y values as mouse moves
     // kCrosshair = 1: both vertical and horizontal lines

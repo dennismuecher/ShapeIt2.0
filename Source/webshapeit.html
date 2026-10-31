@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
-ShapeIt 2.0 - Web Interface
+ShapeIt 2.1 - Web Interface
 ═══════════════════════════════════════════════════════════════════════════════
 
 Browser frontend for the ShapeIt nuclear physics analysis tool. Communicates
@@ -48,7 +48,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 <html>
 <head>
 <meta charset="utf-8">
-<title>ShapeIt 2.0</title>
+<title>ShapeIt 2.1</title>
 <!-- do not remove next line, required for JSROOT modules map (RWebWindow injects the real import map here when serving this page) -->
 <!--jsroot_importmap-->
 <!-- External stylesheet -->
@@ -136,7 +136,10 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
       <div id="import-mode-banner" style="display:none; margin: 8px 12px 0; padding: 6px 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; font-size: 12px; color: #856404;">
         Import mode — no matrix loaded
       </div>
-      <button class="btn-run" style="margin: 8px 12px 8px 12px; width: calc(100% - 24px);">ShapeIt!</button>
+      <button class="btn-run" style="margin: 8px 12px 8px 12px; width: calc(100% - 24px); padding: 0; overflow: hidden; background: #fff; border: 1px solid #dde3ea; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
+        <img src="logo2.jpg" alt="ShapeIt!" class="btn-run-logo" id="btn-run-logo" style="width: 70%; display: block; margin: 4px auto;">
+        <span id="btn-run-label" style="display: none; padding: 10px 16px;"></span>
+      </button>
 
       <div id="sidebar-scroll">
 
@@ -462,7 +465,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
               <input type="checkbox" id="opt-background"> Background subtraction
             </label>
             <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;" id="width-calib-label">
-              <input type="checkbox" id="opt-width-calib"> Use width calibration
+              <input type="checkbox" id="opt-width-calib"> Use width calibration for autofit
             </label>
             <p style="font-size: 12px; color: #666; margin: 0 0 0 26px; line-height: 1.3;">Fit peak widths vs energy to guide autofits (requires autofit mode + existing calibration data)</p>
           </div>
@@ -492,7 +495,15 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
         <!-- TAB 5: Width Calibration - Linear fit parameters for peak widths (hidden by default, shown via menu) -->
         <div id="panel-width-calib" style="display: none;">
           <h3>Width Calibration</h3>
-          
+
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 10px;" id="width-calib-label-2">
+            <input type="checkbox" id="opt-width-calib-2"> Use width calibration for autofit
+          </label>
+
+          <button id="btn-refresh-autofits" style="width: 100%; padding: 10px; margin-bottom: 16px; background: #1e2a38; color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;">
+            Refresh Autofits
+          </button>
+
           <p style="font-size: 12px; color: #666; margin: 0 0 14px; line-height: 1.4;">
             Linear fit: width = offset + slope × E<sub>γ</sub>
           </p>
@@ -801,6 +812,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
   let intentionalExit = false;     // True when user confirmed exit via File menu
   let widthCalibAvailable = false;  // True if a matrix is loaded (Show width calibration usable)
   let widthCalibDone = false;       // True if a width calibration has actually been performed
+  let returnToWidthCalib = false;   // True when Refresh Autofits was triggered from the width calib panel
   let pendingSavePath = null;       // Path for pending save (used by version dialog)
   let effiFileName = '';            // Efficiency correction file path
   let hasEffiFile = false;          // True if efficiency file is loaded
@@ -847,23 +859,32 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 
   // Update width calibration checkbox state based on availability
   function updateWidthCalibState() {
-    const checkbox = document.getElementById('opt-width-calib');
-    const label = document.getElementById('width-calib-label');
-    const showBtn = document.getElementById('btn-show-width-calib');
-    
+    const checkbox  = document.getElementById('opt-width-calib');
+    const checkbox2 = document.getElementById('opt-width-calib-2');
+    const label     = document.getElementById('width-calib-label');
+    const label2    = document.getElementById('width-calib-label-2');
+    const showBtn   = document.getElementById('btn-show-width-calib');
+
     // Show button only needs a loaded matrix; the checkbox additionally needs a
     // calibration to have actually been performed (otherwise widths would be zero).
     showBtn.disabled = !widthCalibAvailable;
 
     if (widthCalibDone) {
       checkbox.disabled = false;
+      checkbox2.disabled = false;
       label.style.color = '';
+      label2.style.color = '';
       label.removeAttribute('title');
+      label2.removeAttribute('title');
     } else {
       checkbox.disabled = true;
       checkbox.checked = false;
+      checkbox2.disabled = true;
+      checkbox2.checked = false;
       label.style.color = '#999';
+      label2.style.color = '#999';
       label.title = 'Perform a width calibration first (Display -> Show width calibration...)';
+      label2.title = 'Perform a width calibration first (Display -> Show width calibration...)';
     }
   }
 
@@ -1455,7 +1476,9 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
           
           // Index 34: Width calibration (CORRECTED!)
           if (v.length >= 35) {
-            document.getElementById('opt-width-calib').checked = v[34] !== 0;
+            const wcVal = v[34] !== 0;
+            document.getElementById('opt-width-calib').checked = wcVal;
+            document.getElementById('opt-width-calib-2').checked = wcVal;
           }
           
           // Indices 35-37: Bin size variation (CORRECTED!)
@@ -1784,6 +1807,12 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
         // Generic status message
         else {
           setStatus(msg);
+          // After a run triggered from the width calibration panel, snap back to it
+          if (msg === 'Done.' && returnToWidthCalib) {
+            returnToWidthCalib = false;
+            if (conn_handle) conn_handle.send('SHOW_WIDTH_CALIB');
+            showTab('width-calib');
+          }
         }
       },
       
@@ -2282,6 +2311,14 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
   ['opt-interpol', 'opt-oslo', 'opt-sliding', 'opt-background', 'opt-width-calib'].forEach(id => {
     document.getElementById(id).addEventListener('change', sendOptions);
   });
+  // Keep the duplicate width-calib checkbox in the calibration panel in sync
+  document.getElementById('opt-width-calib').addEventListener('change', () => {
+    document.getElementById('opt-width-calib-2').checked = document.getElementById('opt-width-calib').checked;
+  });
+  document.getElementById('opt-width-calib-2').addEventListener('change', () => {
+    document.getElementById('opt-width-calib').checked = document.getElementById('opt-width-calib-2').checked;
+    sendOptions();
+  });
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // DISPLAY OPTIONS - Control individual/average points and color coding
@@ -2366,6 +2403,12 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
     if (conn_handle) {
       conn_handle.send('REFRESH_WIDTH_CALIB_FITS');
     }
+  });
+
+  // Refresh autofits button - re-runs the full ShapeIt analysis then returns to width calib view
+  document.getElementById('btn-refresh-autofits').addEventListener('click', () => {
+    returnToWidthCalib = true;
+    document.querySelector('.btn-run').click();
   });
   
   function sendWidthCalibParams() {
@@ -2465,7 +2508,11 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 
   function enterImportMode() {
     importGsfMode = true;
-    document.querySelector('.btn-run').textContent = 'Re-read gSF files';
+    document.getElementById('btn-run-logo').style.display = 'none';
+    const lbl = document.getElementById('btn-run-label');
+    lbl.textContent = 'Re-read gSF files';
+    lbl.style.display = 'inline-block';
+    document.querySelector('.btn-run').style.background = '#3a86ff';
     document.getElementById('import-mode-banner').style.display = 'block';
 
     // Dim & block Levels, Projections, Options tabs
@@ -2487,7 +2534,9 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 
   function exitImportMode() {
     importGsfMode = false;
-    document.querySelector('.btn-run').textContent = 'ShapeIt!';
+    document.getElementById('btn-run-logo').style.display = 'block';
+    document.getElementById('btn-run-label').style.display = 'none';
+    document.querySelector('.btn-run').style.background = '#fff';
     document.getElementById('import-mode-banner').style.display = 'none';
 
     // Restore tabs

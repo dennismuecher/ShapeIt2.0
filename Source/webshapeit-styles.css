@@ -1,5 +1,5 @@
 /* ============================================
-   ShapeIt 2.0 Stylesheet
+   ShapeIt 2.1 Stylesheet
    Extracted from webshapeit.html for better maintainability
    ============================================ */
 
@@ -263,11 +263,21 @@ html, body {
   color: #fff;
   cursor: pointer;
   box-sizing: border-box;
+  transition: filter 0.15s;
 }
 
 .btn-run:hover {
-  background: #2f6fd6;
+  filter: brightness(0.92);
 }
+
+.btn-run-logo {
+  width: 70%;
+  height: auto;
+  display: block;
+  margin: 4px auto;
+}
+
+
 
 .proj-btn {
   display: block;
