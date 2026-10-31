@@ -3412,6 +3412,70 @@ void ProcessData(unsigned connid, const std::string &arg)
         
         window->Send(connid, "GSF_RESULTS:SUCCESS:" + finalText);
     }
+    else if (arg == "PRINT_NLD_RESULTS") {
+        
+        if (sett->rhoFileName.empty()) {
+            window->Send(connid, "NLD_RESULTS:ERROR:No level density file specified. Load one via Settings > Load NLD literature (Oslo) data...");
+            return;
+        }
+        
+        if (gSystem->AccessPathName(sett->rhoFileName.c_str())) {
+            window->Send(connid, "NLD_RESULTS:ERROR:Level density file not found: " + sett->rhoFileName);
+            return;
+        }
+        
+        ShapeRho* tempRho = new ShapeRho(sett);
+        TGraphErrors *grOrig = tempRho->rhoGraph;
+        
+        if (!grOrig || grOrig->GetN() == 0) {
+            delete tempRho;
+            window->Send(connid, "NLD_RESULTS:ERROR:No level density data found in file: " + sett->rhoFileName);
+            return;
+        }
+        
+        std::ostringstream resultText;
+        resultText << "Nuclear Level Density Results\n";
+        resultText << "File: " << sett->rhoFileName << "\n";
+        resultText << "Alpha = " << sett->lit_alpha;
+        if (sett->lit_alpha_error[0] > 0)
+            resultText << " +/- " << sett->lit_alpha_error[0];
+        resultText << "\n\n";
+        
+        // Original NLD (convert from keV internal units to MeV for display)
+        resultText << "Original NLD:\n";
+        resultText << "Excitation Energy (MeV)    Density (1/MeV)    Error\n";
+        for (int i = 0; i < grOrig->GetN(); i++) {
+            double e   = grOrig->GetX()[i]  / 1000.0;   // keV -> MeV
+            double rho = grOrig->GetY()[i]  * 1000.0;   // /keV -> /MeV
+            double err = grOrig->GetEY()[i] * 1000.0;
+            resultText << e << " " << rho << " " << err << "\n";
+        }
+        resultText << "\n";
+        
+        // Transformed NLD
+        double d_alpha = sett->lit_alpha_error[0];
+        TGraphAsymmErrors *grTrafo = tempRho->rhoTrafoGraph(sett->lit_alpha,
+                                                             sett->lit_alpha - d_alpha,
+                                                             sett->lit_alpha + d_alpha);
+        if (grTrafo && grTrafo->GetN() > 0) {
+            if (d_alpha > 0)
+                resultText << "Transformed NLD (alpha = " << sett->lit_alpha << " +/- " << d_alpha << "):\n";
+            else
+                resultText << "Transformed NLD (alpha = " << sett->lit_alpha << "):\n";
+            resultText << "Excitation Energy (MeV)    Density (1/MeV)    Error low    Error high\n";
+            for (int i = 0; i < grTrafo->GetN(); i++) {
+                double e    = grTrafo->GetX()[i]      / 1000.0;
+                double rho  = grTrafo->GetY()[i]      * 1000.0;
+                double eyl  = grTrafo->GetEYlow()[i]  * 1000.0;
+                double eyh  = grTrafo->GetEYhigh()[i] * 1000.0;
+                resultText << e << " " << rho << " " << eyl << " " << eyh << "\n";
+            }
+        }
+        
+        delete tempRho;
+        
+        window->Send(connid, "NLD_RESULTS:SUCCESS:" + resultText.str());
+    }
     else if (starts_with(arg, "SHOWBINPROJ:")) {
         if (!matrix) {
             window->Send(connid, "No matrix loaded yet -- open one first.");

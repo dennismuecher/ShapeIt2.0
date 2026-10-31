@@ -29,7 +29,7 @@ FEATURES:
 
 COMMUNICATION PROTOCOL (Frontend → Backend):
   RUN, OPEN:<path>, SAVE_SETTINGS:<path>, LOAD_SETTINGS:<path>
-  SHOWMATRIX, SHOWPROJ, SHOWBIN:<n>, SHOW_GSF_RESULTS, SHOW_LEVEL_DENSITY
+  SHOWMATRIX, SHOWPROJ, SHOWBIN:<n>, SHOW_GSF_RESULTS, SHOW_LEVEL_DENSITY, PRINT_NLD_RESULTS
   SHOW_WIDTH_CALIB, SHOW_DISCRETE_LEVELS, SHOW_SETTINGS_FILE
   LEVELS:<lo1|hi1|lo2|hi2|exlo|exhi>, NBINSLO:<n>, NBINSHI:<n>
   ALPHA_TRANSFORM:<alpha|lit_norm>, RUN_MC:<iterations|exiMin|exiMax>
@@ -39,7 +39,7 @@ COMMUNICATION PROTOCOL (Frontend → Backend):
 COMMUNICATION PROTOCOL (Backend → Frontend):
   SETTINGS_SYNC:<pipe-delimited values>, DIRLIST:<path|entries>
   MATRIXLIST:<index|names>, NBINS:<size0|size1|nLo|nHi>
-  GSF_RESULTS:<data>, WIDTH_CALIB_AVAILABLE:<0|1>, WIDTH_CALIB_PARAMS:<...>
+  GSF_RESULTS:<data>, NLD_RESULTS:<data>, WIDTH_CALIB_AVAILABLE:<0|1>, WIDTH_CALIB_PARAMS:<...>
   MC_STARTED, MC_STOPPING, MC_STOPPED:<reason>, MC_RESULT:<alpha|chi2|exLow|iter|total>
   UNIT_WARNING_MeV:<maxEnergy>, <any other string> → logged as status message
 
@@ -96,9 +96,11 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
         </label>
         <div class="menu-divider"></div>
         <button class="menu-item" id="btn-show-width-calib" data-tooltip="Open the peak width calibration panel">Width calibration...</button>
-        <button class="menu-item" id="btn-show-level-density" data-tooltip="Plot the nuclear level density derived from current gSF results">Show level density...</button>
+        <button class="menu-item" id="btn-show-level-density" data-tooltip="Plot the nuclear level density derived from current gSF results">Plot level density...</button>
         <button class="menu-item" id="btn-show-settings-file" data-tooltip="Display the raw contents of the current settings file">Show settings file...</button>
-        <button class="menu-item" id="btn-show-gsf-results" data-tooltip="Plot the computed γ-ray strength function">Show gSF results...</button>
+        <div class="menu-divider"></div>
+        <button class="menu-item" id="btn-print-nld-results" data-tooltip="Display a table of the original and transformed nuclear level density values">Print nuclear level density results...</button>
+        <button class="menu-item" id="btn-show-gsf-results" data-tooltip="Display a table of the computed γ-ray strength function values">Print gSF results...</button>
       </div>
     </div>
     <div class="menu">
@@ -1152,10 +1154,18 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
     closeAllMenus();
   });
 
-  // Show gSF results
+  // Print gSF results
   document.getElementById('btn-show-gsf-results').addEventListener('click', () => {
     if (conn_handle) {
       conn_handle.send('SHOW_GSF_RESULTS');
+    }
+    closeAllMenus();
+  });
+
+  // Print NLD results
+  document.getElementById('btn-print-nld-results').addEventListener('click', () => {
+    if (conn_handle) {
+      conn_handle.send('PRINT_NLD_RESULTS');
     }
     closeAllMenus();
   });
@@ -1765,6 +1775,20 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
             setStatus(content);
           } else if (status === 'SUCCESS') {
             showSettingsViewer(content, 'gSF Results');
+          }
+        }
+        
+        // NLD results text
+        else if (msg.startsWith('NLD_RESULTS:')) {
+          const rest = msg.substring(12);  // Remove "NLD_RESULTS:"
+          const colonPos = rest.indexOf(':');
+          const status = rest.substring(0, colonPos);
+          const content = rest.substring(colonPos + 1);
+          
+          if (status === 'ERROR') {
+            setStatus(content);
+          } else if (status === 'SUCCESS') {
+            showSettingsViewer(content, 'Nuclear Level Density Results');
           }
         }
         
