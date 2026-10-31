@@ -44,6 +44,7 @@ void ShapeMatrix::Reset() {
 }
 
 TH2* ShapeMatrix::GetInputMatrix (std::string title) {
+    if (!inputMatrix) return nullptr;
     inputMatrix->SetTitle(title.c_str());
     return inputMatrix;
 }
@@ -60,7 +61,11 @@ void ShapeMatrix::openMatrix(){
 void ShapeMatrix::SetMatrix(int mNr) {
 
     dataFile->GetObject(matrixName[mNr-1].c_str(), inputMatrix);
-    //inputMatrix->SetTitle(sett->dataFileName.c_str());
+    if (!inputMatrix) {
+        cout << "Error: could not read matrix '" << matrixName[mNr-1]
+             << "' from file. The file may have been written with an incompatible ROOT version." << endl;
+        return;
+    }
     sett->matrixName = matrixName[mNr-1];
 
 }
@@ -664,7 +669,12 @@ void ShapeMatrix::FitGauss(TH1D *histo, int bin, int level) {
 
 //creates the matrices for shape method for excitation energies between ene0 and ene1, with bin size esize for the excitation energies
 void ShapeMatrix::Diag(){
-	
+
+    if (!inputMatrix) {
+        cout << "Error: Diag() called with no matrix loaded." << endl;
+        return;
+    }
+
     double MeV = sett->MeV;
     XNum  = inputMatrix->GetNbinsX();
     YNum  = inputMatrix->GetNbinsY();
@@ -799,15 +809,16 @@ TGraph* ShapeMatrix::getFitWidthGraph(int level) {
 //loop through all objects in root file and store all TH2D object names in matrixName
 void ShapeMatrix::BrowseRootFile()
 {
-   
     TIter keyList(dataFile->GetListOfKeys());
     TKey *key;
     while ((key = (TKey*)keyList())) {
         TClass *cl = gROOT->GetClass(key->GetClassName());
-        if (!cl->InheritsFrom("TH2")) continue;
-        TH2 *h = (TH2*)key->ReadObj();
-        matrixName.push_back(h->GetName());
-    
+        // Guard against unknown classes and non-TH2 objects.
+        // Use key->GetName() rather than ReadObj()->GetName() so we never attempt
+        // to deserialise the histogram here — ReadObj() triggers StreamerInfo
+        // version errors when the file was written with an older ROOT, and the
+        // returned pointer can be null, causing a segfault.
+        if (!cl || !cl->InheritsFrom("TH2")) continue;
+        matrixName.push_back(key->GetName());
     }
-  
 }

@@ -311,6 +311,16 @@ void SendMatrixListAndSelect(unsigned connid, const std::string &matrixPath, int
 
     matrix->SetMatrix(selectIndex);
 
+    // Guard: SetMatrix() can fail silently when the file was written with an
+    // incompatible ROOT version (StreamerInfo mismatch).  GetInputMatrix()
+    // returns the raw pointer — check it before dereferencing.
+    TH2* hist = matrix->GetInputMatrix(BaseName(matrixPath));
+    if (!hist) {
+        window->Send(connid, "ERROR:Could not load matrix '" + names[selectIndex-1] +
+                     "'. The file may have been written with an incompatible ROOT version.");
+        return;
+    }
+
     // Clear canvas and set up fresh, exactly like SHOWMATRIX does
     canvas->cd();
     canvas->Clear();
@@ -324,7 +334,6 @@ void SendMatrixListAndSelect(unsigned connid, const std::string &matrixPath, int
     // Enable logarithmic z-axis scale
     gPad->SetLogz(1);
 
-    TH2* hist = matrix->GetInputMatrix(BaseName(matrixPath));
     hist->SetStats(0);
 
     // Build a display-only rebinned copy so JSROOT renders fewer bins.
@@ -2205,16 +2214,18 @@ void ProcessData(unsigned connid, const std::string &arg)
         sett->SetFileName(path);
         currentMatrixPath = path;
 
-        // Apply default fit regions, peak positions, and background windows
-        // for a freshly opened matrix (no settings file loaded).
-        sett->levEne[0] = 200; sett->levEne[1] = 400;   // Level 1 fit region
-        sett->levEne[2] = 800; sett->levEne[3] = 1000;  // Level 2 fit region
-        sett->peakPos[0] = 300;                          // Level 1 peak position
-        sett->peakPos[1] = 900;                          // Level 2 peak position
-        sett->bgEne[0][0] = 100;  sett->bgEne[0][1] = 150;   // BG level 1 left
-        sett->bgEne[0][2] = 550;  sett->bgEne[0][3] = 600;   // BG level 1 right
-        sett->bgEne[1][0] = 700;  sett->bgEne[1][1] = 750;   // BG level 2 left
-        sett->bgEne[1][2] = 1100; sett->bgEne[1][3] = 1150;  // BG level 2 right
+        // Apply default fit regions only when no settings file is active;
+        // if one is loaded, keep its values so switching matrices doesn't wipe them.
+        if (sett->settFileName.empty()) {
+            sett->levEne[0] = 200; sett->levEne[1] = 400;
+            sett->levEne[2] = 800; sett->levEne[3] = 1000;
+            sett->peakPos[0] = 300;
+            sett->peakPos[1] = 900;
+            sett->bgEne[0][0] = 100;  sett->bgEne[0][1] = 150;
+            sett->bgEne[0][2] = 550;  sett->bgEne[0][3] = 600;
+            sett->bgEne[1][0] = 700;  sett->bgEne[1][1] = 750;
+            sett->bgEne[1][2] = 1100; sett->bgEne[1][3] = 1150;
+        }
 
         delete matrix;
         matrix = nullptr;

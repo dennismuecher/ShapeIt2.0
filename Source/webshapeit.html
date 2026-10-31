@@ -767,6 +767,21 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
+     OPEN MATRIX DIALOG - Prompt to save changes before opening a new matrix
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="open-matrix-dialog-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; z-index: 1001;">
+  <div style="background: #fff; width: 440px; border-radius: 8px; padding: 20px; box-sizing: border-box;">
+    <h3 style="margin: 0 0 12px; font-size: 16px;">Unsaved Changes</h3>
+    <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.5;">The settings have been modified. Save before opening a new matrix?</p>
+    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+      <button id="open-matrix-discard" style="padding: 8px 16px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer;">Discard &amp; Open</button>
+      <button id="open-matrix-save" style="padding: 8px 16px; font-size: 13px; border: 1px solid #3a86ff; border-radius: 4px; background: #fff; color: #3a86ff; cursor: pointer;">Save &amp; Open</button>
+      <button id="open-matrix-cancel" style="padding: 8px 16px; font-size: 13px; border: none; border-radius: 4px; background: #3a86ff; color: #fff; cursor: pointer;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
      SETTINGS FILE VIEWER - Display settings file content and gSF results
      ═══════════════════════════════════════════════════════════════════ -->
 <div id="settings-viewer-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; z-index: 1003;">
@@ -873,6 +888,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
   let widthCalibDone = false;       // True if a width calibration has actually been performed
   let returnToWidthCalib = false;   // True when Refresh Autofits was triggered from the width calib panel
   let pendingSavePath = null;       // Path for pending save (used by version dialog)
+  let pendingOpenMatrixPath = null; // Path deferred while unsaved-changes dialog is shown
   let effiFileName = '';            // Efficiency correction file path
   let hasEffiFile = false;          // True if efficiency file is loaded
 
@@ -1331,7 +1347,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 
   // Handle file selection
   function confirmSelection(fullPath) {
-    if (fbMode === 'open-matrix') conn_handle.send('OPEN:' + fullPath);
+    if (fbMode === 'open-matrix') handleOpenMatrix(fullPath);
     else if (fbMode === 'open-import-gsf') {
       conn_handle.send('LOAD_IMPORT_GSF:' + fullPath);
       markSettingsDirty();
@@ -2246,6 +2262,50 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
   document.getElementById('btn-save-settings-as').addEventListener('click', () => {
     openFileBrowser('save-settings', 'Save settings as...');
     closeAllMenus();
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // OPEN MATRIX - Check for unsaved changes before opening a new matrix
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  function doOpenMatrix(fullPath) {
+    if (conn_handle) conn_handle.send('OPEN:' + fullPath);
+  }
+
+  function handleOpenMatrix(fullPath) {
+    // If settings are dirty and a file path exists, prompt before opening
+    if (settingsDirty && currentSettingsPath) {
+      pendingOpenMatrixPath = fullPath;
+      document.getElementById('open-matrix-dialog-overlay').style.display = 'flex';
+    } else {
+      doOpenMatrix(fullPath);
+    }
+  }
+
+  document.getElementById('open-matrix-save').addEventListener('click', () => {
+    if (currentSettingsPath && conn_handle) {
+      conn_handle.send('SAVE_SETTINGS:' + currentSettingsPath);
+      markSettingsClean();
+      updateSettingsDisplay();
+    }
+    document.getElementById('open-matrix-dialog-overlay').style.display = 'none';
+    if (pendingOpenMatrixPath) {
+      doOpenMatrix(pendingOpenMatrixPath);
+      pendingOpenMatrixPath = null;
+    }
+  });
+
+  document.getElementById('open-matrix-discard').addEventListener('click', () => {
+    document.getElementById('open-matrix-dialog-overlay').style.display = 'none';
+    if (pendingOpenMatrixPath) {
+      doOpenMatrix(pendingOpenMatrixPath);
+      pendingOpenMatrixPath = null;
+    }
+  });
+
+  document.getElementById('open-matrix-cancel').addEventListener('click', () => {
+    document.getElementById('open-matrix-dialog-overlay').style.display = 'none';
+    pendingOpenMatrixPath = null;
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════
