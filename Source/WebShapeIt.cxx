@@ -101,6 +101,11 @@ ShapeGSF       *importLitGsf = nullptr;  // Oslo literature overlay for import m
 std::string currentMatrixPath;
 std::string gStartDir;
 
+// Rebinned display-only copy of the matrix. JSROOT renders the full TH2 client-side,
+// so large matrices (thousands of bins per axis) take many seconds to render.
+// Kept alive at module scope so JSROOT can re-request it on zoom events.
+TH2 *gDisplayMatrix = nullptr;
+
 // mirrors ShapeFrame's displayMode: 1=matrix, 4=summed diagonal projection,
 // 5=per-bin projection. Markers (Level 1/2 lines + background boxes) are only
 // drawn/draggable in modes 4 and 5, same as the native GUI.
@@ -305,52 +310,72 @@ void SendMatrixListAndSelect(unsigned connid, const std::string &matrixPath, int
     window->Send(connid, msg);
 
     matrix->SetMatrix(selectIndex);
-    
+
     // Clear canvas and set up fresh, exactly like SHOWMATRIX does
     canvas->cd();
     canvas->Clear();
-    
+
     // Set pad margins to accommodate the manually-positioned color palette
     gPad->SetRightMargin(0.15);  // 15% right margin provides space for palette
     gPad->SetLeftMargin(0.12);   // 12% left margin for y-axis label
     gPad->SetTopMargin(0.08);
     gPad->SetBottomMargin(0.10);
-    
+
     // Enable logarithmic z-axis scale
     gPad->SetLogz(1);
-    
+
     TH2* hist = matrix->GetInputMatrix(BaseName(matrixPath));
-    hist->SetStats(0);  // Disable statistics box
-    
-    // Set axis titles with LaTeX formatting
-    hist->GetXaxis()->SetTitle("E_{#gamma} (keV)");
-    hist->GetYaxis()->SetTitle("E_{x} (keV)");
-    hist->GetXaxis()->SetTitleSize(0.045);
-    hist->GetYaxis()->SetTitleSize(0.045);
-    hist->GetXaxis()->SetTitleOffset(1.0);
-    hist->GetYaxis()->SetTitleOffset(1.1);
-    
-    // Draw histogram without automatic palette (use "col" not "colz")
-    hist->Draw("col");
-    
+    hist->SetStats(0);
+
+    // Build a display-only rebinned copy so JSROOT renders fewer bins.
+    // JSROOT renders the full TH2 client-side; sending the full-resolution
+    // matrix causes multi-second browser delays for large matrices. We target
+    // ~500 bins per axis while keeping the full-resolution hist for analysis.
+    // Rebinning is skipped when fullResDisplay is enabled.
+    delete gDisplayMatrix;
+    gDisplayMatrix = nullptr;
+    TH2 *drawHist = hist;
+    if (!sett->fullResDisplay) {
+        const int kMaxDisplayBins = 500;
+        int nBinsX = hist->GetNbinsX();
+        int nBinsY = hist->GetNbinsY();
+        int rebinX = std::max(1, nBinsX / kMaxDisplayBins);
+        int rebinY = std::max(1, nBinsY / kMaxDisplayBins);
+        if (rebinX > 1 || rebinY > 1) {
+            gDisplayMatrix = (TH2*)hist->Clone("_display_matrix");
+            gDisplayMatrix->SetDirectory(nullptr);
+            gDisplayMatrix->Rebin2D(rebinX, rebinY);
+            drawHist = gDisplayMatrix;
+        }
+    }
+    drawHist->SetStats(0);
+    drawHist->GetXaxis()->SetTitle("E_{#gamma} (keV)");
+    drawHist->GetYaxis()->SetTitle("E_{x} (keV)");
+    drawHist->GetXaxis()->SetTitleSize(0.045);
+    drawHist->GetYaxis()->SetTitleSize(0.045);
+    drawHist->GetXaxis()->SetTitleOffset(1.0);
+    drawHist->GetYaxis()->SetTitleOffset(1.1);
+
+    drawHist->Draw("col");
+
     // Manually create and position the color palette using NDC coordinates
     // First create it with histogram coordinates (required by constructor)
-    double xmin = hist->GetXaxis()->GetXmin();
-    double xmax = hist->GetXaxis()->GetXmax();
-    double ymin = hist->GetYaxis()->GetXmin();
-    double ymax = hist->GetYaxis()->GetXmax();
-    TPaletteAxis *palette = new TPaletteAxis(xmax, ymin, xmax + (xmax-xmin)*0.05, ymax, hist);
-    
+    double xmin = drawHist->GetXaxis()->GetXmin();
+    double xmax = drawHist->GetXaxis()->GetXmax();
+    double ymin = drawHist->GetYaxis()->GetXmin();
+    double ymax = drawHist->GetYaxis()->GetXmax();
+    TPaletteAxis *palette = new TPaletteAxis(xmax, ymin, xmax + (xmax-xmin)*0.05, ymax, drawHist);
+
     // Override with NDC coordinates to position it within the right margin
     palette->SetX1NDC(0.86);  // Left edge at 86% of canvas width
     palette->SetX2NDC(0.89);  // Right edge at 89% of canvas width
     palette->SetY1NDC(0.10);  // Bottom aligned with pad margin
     palette->SetY2NDC(0.90);  // Top aligned with pad margin
     palette->Draw();
-    
-    matrix->Diag();
+
     gPad->Modified();
     PushCanvasUpdate();
+    matrix->Diag();
 }
 
 // Sends the current sett state back to the browser so form fields can be kept
@@ -417,7 +442,8 @@ void SendSettingsSync(unsigned connid)
     msg += std::to_string(sett->showNLDOriginal ? 1 : 0) + "|";               // index 60
     msg += std::to_string(sett->showNLDTransformed ? 1 : 0) + "|";             // index 61
     msg += std::to_string(sett->showNLDDiscrete ? 1 : 0) + "|";               // index 62
-    msg += std::to_string(sett->lit_alpha_error[0]);                           // index 63
+    msg += std::to_string(sett->lit_alpha_error[0]) + "|";                    // index 63
+    msg += std::to_string(sett->fullResDisplay ? 1 : 0);                       // index 64
 
     window->Send(connid, msg);
 }
@@ -2643,26 +2669,44 @@ void ProcessData(unsigned connid, const std::string &arg)
         gPad->SetLogz(1);
         
         TH2* hist = matrix->GetInputMatrix(BaseName(currentMatrixPath));
-        hist->SetStats(0);  // Disable statistics box
-        
-        // Set axis titles with LaTeX formatting
-        hist->GetXaxis()->SetTitle("E_{#gamma} (keV)");
-        hist->GetYaxis()->SetTitle("E_{x} (keV)");
-        hist->GetXaxis()->SetTitleSize(0.045);
-        hist->GetYaxis()->SetTitleSize(0.045);
-        hist->GetXaxis()->SetTitleOffset(1.0);
-        hist->GetYaxis()->SetTitleOffset(1.1);
-        
-        // Draw histogram without automatic palette (use "col" not "colz")
-        hist->Draw("col");
-        
+        hist->SetStats(0);
+
+        // Reuse the rebinned display copy created by SendMatrixListAndSelect, or
+        // create a fresh one if SHOWMATRIX is called independently.
+        // Rebinning is skipped when fullResDisplay is enabled.
+        delete gDisplayMatrix;
+        gDisplayMatrix = nullptr;
+        TH2 *drawHist = hist;
+        if (!sett->fullResDisplay) {
+            const int kMaxDisplayBins = 500;
+            int nBinsX = hist->GetNbinsX();
+            int nBinsY = hist->GetNbinsY();
+            int rebinX = std::max(1, nBinsX / kMaxDisplayBins);
+            int rebinY = std::max(1, nBinsY / kMaxDisplayBins);
+            if (rebinX > 1 || rebinY > 1) {
+                gDisplayMatrix = (TH2*)hist->Clone("_display_matrix");
+                gDisplayMatrix->SetDirectory(nullptr);
+                gDisplayMatrix->Rebin2D(rebinX, rebinY);
+                drawHist = gDisplayMatrix;
+            }
+        }
+        drawHist->SetStats(0);
+        drawHist->GetXaxis()->SetTitle("E_{#gamma} (keV)");
+        drawHist->GetYaxis()->SetTitle("E_{x} (keV)");
+        drawHist->GetXaxis()->SetTitleSize(0.045);
+        drawHist->GetYaxis()->SetTitleSize(0.045);
+        drawHist->GetXaxis()->SetTitleOffset(1.0);
+        drawHist->GetYaxis()->SetTitleOffset(1.1);
+
+        drawHist->Draw("col");
+
         // Manually create and position the color palette using NDC coordinates
         // First create it with histogram coordinates (required by constructor)
-        double xmin = hist->GetXaxis()->GetXmin();
-        double xmax = hist->GetXaxis()->GetXmax();
-        double ymin = hist->GetYaxis()->GetXmin();
-        double ymax = hist->GetYaxis()->GetXmax();
-        TPaletteAxis *palette = new TPaletteAxis(xmax, ymin, xmax + (xmax-xmin)*0.05, ymax, hist);
+        double xmin = drawHist->GetXaxis()->GetXmin();
+        double xmax = drawHist->GetXaxis()->GetXmax();
+        double ymin = drawHist->GetYaxis()->GetXmin();
+        double ymax = drawHist->GetYaxis()->GetXmax();
+        TPaletteAxis *palette = new TPaletteAxis(xmax, ymin, xmax + (xmax-xmin)*0.05, ymax, drawHist);
         
         // Override with NDC coordinates to position it within the right margin
         palette->SetX1NDC(0.86);  // Left edge at 86% of canvas width
@@ -2673,6 +2717,59 @@ void ProcessData(unsigned connid, const std::string &arg)
         
         gPad->Modified();
         PushCanvasUpdate();
+    }
+    else if (starts_with(arg, "FULL_RES_MATRIX:")) {
+        int val = std::stoi(after_prefix(arg, "FULL_RES_MATRIX:"));
+        sett->fullResDisplay = (val == 1);
+        window->Send(connid, sett->fullResDisplay ? "Matrix display: full resolution" : "Matrix display: fast (downsampled)");
+        // Redraw matrix immediately if it is currently displayed
+        if (gDisplayMode == 1 && matrix) {
+            canvas->cd();
+            canvas->Clear();
+            gPad->SetRightMargin(0.15);
+            gPad->SetLeftMargin(0.12);
+            gPad->SetTopMargin(0.08);
+            gPad->SetBottomMargin(0.10);
+            gPad->SetLogz(1);
+            TH2* hist = matrix->GetInputMatrix(BaseName(currentMatrixPath));
+            hist->SetStats(0);
+            delete gDisplayMatrix;
+            gDisplayMatrix = nullptr;
+            TH2 *drawHist = hist;
+            if (!sett->fullResDisplay) {
+                const int kMaxDisplayBins = 500;
+                int nBinsX = hist->GetNbinsX();
+                int nBinsY = hist->GetNbinsY();
+                int rebinX = std::max(1, nBinsX / kMaxDisplayBins);
+                int rebinY = std::max(1, nBinsY / kMaxDisplayBins);
+                if (rebinX > 1 || rebinY > 1) {
+                    gDisplayMatrix = (TH2*)hist->Clone("_display_matrix");
+                    gDisplayMatrix->SetDirectory(nullptr);
+                    gDisplayMatrix->Rebin2D(rebinX, rebinY);
+                    drawHist = gDisplayMatrix;
+                }
+            }
+            drawHist->SetStats(0);
+            drawHist->GetXaxis()->SetTitle("E_{#gamma} (keV)");
+            drawHist->GetYaxis()->SetTitle("E_{x} (keV)");
+            drawHist->GetXaxis()->SetTitleSize(0.045);
+            drawHist->GetYaxis()->SetTitleSize(0.045);
+            drawHist->GetXaxis()->SetTitleOffset(1.0);
+            drawHist->GetYaxis()->SetTitleOffset(1.1);
+            drawHist->Draw("col");
+            double xmin = drawHist->GetXaxis()->GetXmin();
+            double xmax = drawHist->GetXaxis()->GetXmax();
+            double ymin = drawHist->GetYaxis()->GetXmin();
+            double ymax = drawHist->GetYaxis()->GetXmax();
+            TPaletteAxis *palette = new TPaletteAxis(xmax, ymin, xmax + (xmax-xmin)*0.05, ymax, drawHist);
+            palette->SetX1NDC(0.86);
+            palette->SetX2NDC(0.89);
+            palette->SetY1NDC(0.10);
+            palette->SetY2NDC(0.90);
+            palette->Draw();
+            gPad->Modified();
+            PushCanvasUpdate();
+        }
     }
     else if (arg == "SHOWPROJ") {
         if (!matrix) {

@@ -279,7 +279,7 @@ void ShapeSetting::SaveSettings() {
     outfile << "showNLDOriginal " << showNLDOriginal <<"\n";
     outfile << "showNLDTransformed " << showNLDTransformed <<"\n";
     outfile << "showNLDDiscrete " << showNLDDiscrete <<"\n";
-
+    outfile << "fullResDisplay " << fullResDisplay <<"\n";
 
     outfile << "discreteLevelFile " << discreteLevelFile << " " << discreteBins << "\n";
     
@@ -413,6 +413,7 @@ void ShapeSetting::ReadSettings() {
             if (word == "showNLDOriginal" ) isstr >> showNLDOriginal ;
             if (word == "showNLDTransformed" ) isstr >> showNLDTransformed ;
             if (word == "showNLDDiscrete" ) isstr >> showNLDDiscrete ;
+            if (word == "fullResDisplay" ) isstr >> fullResDisplay ;
 
             if (word == "rhoFileName" ) {
                 getline(isstr, rhoFileName);

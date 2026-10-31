@@ -404,6 +404,16 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
             <span id="effi-file-text" style="color: #999;">Use energy-dependent file</span>
           </label>
           <div id="effi-filename-display" style="font-size: 11px; color: #666; margin-top: 4px; display: none;"></div>
+
+          <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+              <input type="checkbox" id="full-res-matrix" style="margin: 0;">
+              <span>Display at full resolution</span>
+            </label>
+            <p style="font-size: 11px; color: #888; margin: 4px 0 0 20px; line-height: 1.4;">
+              Disables downsampling for matrix display. May cause slow rendering for large matrices.
+            </p>
+          </div>
         </div>
 
         <!-- TAB 3: Projections - View matrix, diagonal projection, or individual bins -->
@@ -1467,6 +1477,10 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
             document.getElementById('alpha-error').value = v[63];
             document.getElementById('rho-d-alpha-err').value = v[63];
           }
+          // Index 64: fullResDisplay
+          if (v.length >= 65) {
+            document.getElementById('full-res-matrix').checked = v[64] !== 0;
+          }
           
           // Indices 45-48: Peak 1 position settings (CORRECTED!)
           if (v.length >= 49) {
@@ -2311,6 +2325,13 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
     const useFile = e.target.checked ? 1 : 0;
     if (conn_handle) conn_handle.send('DOEFFI:' + useFile);
     updateEffiState();
+    markSettingsDirty();
+  });
+
+  // Full resolution matrix display checkbox handler
+  document.getElementById('full-res-matrix').addEventListener('change', (e) => {
+    const val = e.target.checked ? 1 : 0;
+    if (conn_handle) conn_handle.send('FULL_RES_MATRIX:' + val);
     markSettingsDirty();
   });
 

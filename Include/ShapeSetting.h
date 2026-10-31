@@ -111,6 +111,7 @@ public:
     bool doSlidingWindow = false;           //says if sliding window variation should be performed
     bool doBinVariation = false;
     bool doAutoScale = false;               //if true, automatically scale gSF to Oslo data
+    bool fullResDisplay = false;            //if true, display matrix at full resolution (no downsampling)
     
     void SaveSettings();
     void ReadSettings();
