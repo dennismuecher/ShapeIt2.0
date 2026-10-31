@@ -2032,6 +2032,7 @@ void RunShapeIt(unsigned connid)
     // that plausibly corrupts the same primitive list CreatePadSnapshot walks
     // moments later -- which lines up exactly with where this crash happens.
     // This is display mode 0: "results view, no markers apply".
+    gPad->SetLogy(1);  // Log y-axis by default for gSF display
     gDisplayMode = 0;
     gHaveLastRange = false;
 
@@ -2700,8 +2701,10 @@ void ProcessData(unsigned connid, const std::string &arg)
         gPad->SetTopMargin(0.08);
         gPad->SetBottomMargin(0.10);
         
-        // Enable logarithmic z-axis scale
+        // Enable logarithmic z-axis scale; linear x and y for matrix display
         gPad->SetLogz(1);
+        gPad->SetLogy(0);
+        gPad->SetLogx(0);
         
         TH2* hist = matrix->GetInputMatrix(BaseName(currentMatrixPath));
         hist->SetStats(0);
@@ -2766,6 +2769,8 @@ void ProcessData(unsigned connid, const std::string &arg)
             gPad->SetTopMargin(0.08);
             gPad->SetBottomMargin(0.10);
             gPad->SetLogz(1);
+            gPad->SetLogy(0);
+            gPad->SetLogx(0);
             TH2* hist = matrix->GetInputMatrix(BaseName(currentMatrixPath));
             hist->SetStats(0);
             delete gDisplayMatrix;
@@ -2815,6 +2820,8 @@ void ProcessData(unsigned connid, const std::string &arg)
         gDisplayMode = 5;
         canvas->cd();
         canvas->Clear();
+        gPad->SetLogy(0);
+        gPad->SetLogx(0);
         for (int i = 0; i < 4; i++) { gMarkerLine[i] = nullptr; gDoubletLine[i] = nullptr; gBgBox[i] = nullptr; }
         gCurrentHist = matrix->GetDiagEx(gCurrentBin, BaseName(currentMatrixPath));
         if (!gCurrentHist) {
@@ -3527,6 +3534,8 @@ void ProcessData(unsigned connid, const std::string &arg)
         gDisplayMode = 5;
         canvas->cd();
         canvas->Clear();
+        gPad->SetLogy(0);
+        gPad->SetLogx(0);
         for (int i = 0; i < 4; i++) { gMarkerLine[i] = nullptr; gDoubletLine[i] = nullptr; gBgBox[i] = nullptr; }
         gCurrentHist = matrix->GetDiagEx(gCurrentBin, BaseName(currentMatrixPath));
         gCurrentHist->Draw();
@@ -4098,7 +4107,7 @@ void ProcessData(unsigned connid, const std::string &arg)
                         hist->SetMinimum(ymin * 0.7);
                     hist->SetMaximum(ymax * 1.3);
                     
-                    // Don't change log scale - preserve whatever the user had set
+                    gPad->SetLogy(1);  // Log y-axis by default for gSF display
                     gPad->Modified();
                 }
             }
@@ -4302,7 +4311,7 @@ void ProcessData(unsigned connid, const std::string &arg)
         
         gDisplayMode = 0;  // Results view
         gHaveLastRange = false;
-        
+        gPad->SetLogy(1);  // Log y-axis by default for gSF display
         PushCanvasUpdate();
         window->Send(connid, "Graph redrawn with alpha=" + std::to_string(sett->lit_alpha));
     }
