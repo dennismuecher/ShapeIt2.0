@@ -105,6 +105,12 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
         <button class="menu-item" id="btn-slope-correction">Slope correction...</button>
       </div>
     </div>
+    <div class="menu">
+      <button class="menu-label" data-menu="help">Help</button>
+      <div class="menu-dropdown" data-menu="help">
+        <button class="menu-item" id="btn-help">Help...</button>
+      </div>
+    </div>
     <div id="settings-info">
       <span id="settings-path">No settings file</span>
       <span id="settings-status"></span>
@@ -654,21 +660,25 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 <!-- ═══════════════════════════════════════════════════════════════════════
      FILE BROWSER MODAL - For opening/saving files (matrix, settings, oslo)
      ═══════════════════════════════════════════════════════════════════ -->
-<div id="filebrowser-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; z-index: 1000;">
-  <div style="background: #fff; width: 520px; max-height: 70vh; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; box-sizing: border-box;">
-    <h3 id="fb-title" style="margin: 0 0 10px;">Select a file</h3>
-    <div id="fb-format-desc" style="display: none; font-size: 12px; color: #666; margin-bottom: 8px; padding: 6px 8px; background: #f0f8ff; border-left: 3px solid #3a86ff; border-radius: 3px;"></div>
-    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-      <button id="fb-up">Up</button>
-      <input type="text" id="fb-path" style="flex: 1; padding: 5px;">
+<div id="filebrowser-overlay">
+  <div id="filebrowser-dialog">
+    <div id="fb-header">
+      <h3 id="fb-title">Select a file</h3>
+      <button id="fb-close" title="Cancel">&#x2715;</button>
+    </div>
+    <div id="fb-format-desc"></div>
+    <div id="fb-toolbar">
+      <button id="fb-up">&#x2191; Up</button>
+      <input type="text" id="fb-path" placeholder="/">
       <button id="fb-go">Go</button>
     </div>
-    <div id="fb-list" style="flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px; min-height: 240px;"></div>
-    <div id="fb-savebar" style="display: none; margin-top: 10px; gap: 8px; align-items: center;">
-      <input type="text" id="fb-filename" placeholder="filename.txt" style="flex: 1; padding: 5px;">
+    <div id="fb-list"></div>
+    <div id="fb-savebar">
+      <label for="fb-filename">Save as:</label>
+      <input type="text" id="fb-filename" placeholder="filename.txt">
       <button id="fb-save-confirm">Save</button>
     </div>
-    <div style="margin-top: 10px; text-align: right;">
+    <div id="fb-footer">
       <button id="fb-cancel">Cancel</button>
     </div>
   </div>
@@ -1206,18 +1216,23 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
       const isDir = line[0] === 'D';
       const name = line.slice(2);
       const row = document.createElement('div');
-      row.textContent = (isDir ? '\u{1F4C1} ' : '\u{1F4C4} ') + name;
-      row.style.padding = '4px 6px';
-      row.style.cursor = 'pointer';
-      row.style.borderRadius = '3px';
-      row.addEventListener('mouseenter', () => row.style.background = '#eef');
-      row.addEventListener('mouseleave', () => row.style.background = '');
+      row.className = 'fb-row' + (isDir ? ' is-dir' : '');
+      const icon = document.createElement('span');
+      icon.className = 'fb-icon';
+      icon.textContent = isDir ? '\u{1F4C1}' : '\u{1F4C4}';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'fb-name';
+      nameEl.textContent = name;
+      row.appendChild(icon);
+      row.appendChild(nameEl);
       row.addEventListener('click', () => {
         const fullPath = path.replace(/\/$/, '') + '/' + name;
         if (isDir) {
           conn_handle.send('LISTDIR:' + fullPath);
         } else if (fbMode === 'save-settings') {
           document.getElementById('fb-filename').value = name;
+          list.querySelectorAll('.fb-row').forEach(r => r.classList.remove('selected'));
+          row.classList.add('selected');
         } else {
           confirmSelection(fullPath);
         }
@@ -1269,6 +1284,7 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
   });
   
   document.getElementById('fb-cancel').addEventListener('click', closeFileBrowser);
+  document.getElementById('fb-close').addEventListener('click', closeFileBrowser);
   
   document.getElementById('fb-save-confirm').addEventListener('click', () => {
     const filename = document.getElementById('fb-filename').value.trim();
@@ -2012,6 +2028,12 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
   }
   ['bg1-lo1', 'bg1-hi1', 'bg1-lo2', 'bg1-hi2', 'bg2-lo1', 'bg2-hi1', 'bg2-lo2', 'bg2-hi2'].forEach(id => {
     document.getElementById(id).addEventListener('change', sendBgEnergies);
+  });
+
+  // Help menu
+  document.getElementById('btn-help').addEventListener('click', () => {
+    window.open('https://dennismuecher.github.io/ShapeIt/', '_blank');
+    closeAllMenus();
   });
 
   // File menu items
