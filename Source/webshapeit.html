@@ -69,6 +69,8 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
         <button class="menu-item" id="btn-open">Open matrix...</button>
         <button class="menu-item" id="btn-import-gsf">Import gSF data...</button>
         <div class="menu-divider"></div>
+        <button class="menu-item" id="btn-info">Info...</button>
+        <div class="menu-divider"></div>
         <button class="menu-item" id="btn-exit">Exit</button>
       </div>
     </div>
@@ -665,6 +667,34 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
       <button id="btn-close-log">Clear</button>
     </div>
     <div id="logpanel-content"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     INFO MODAL - Version, author, contact, links
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="info-overlay">
+  <div id="info-dialog">
+    <button id="info-close" title="Close">&#x2715;</button>
+    <img src="logo2.jpg" alt="ShapeIt" id="info-logo">
+    <h2 id="info-title">ShapeIt 2.1</h2>
+    <p id="info-subtitle">&#947;-ray strength function &amp; nuclear level density analysis</p>
+    <div class="info-divider"></div>
+    <div id="info-details">
+      <div class="info-row"><span class="info-label">Developer</span><span>Dennis Muecher</span></div>
+      <div class="info-row"><span class="info-label">Contact</span><a href="mailto:muecher@ikp.uni-koeln.de">muecher@ikp.uni-koeln.de</a></div>
+      <div class="info-row"><span class="info-label">Affiliation</span><span>Institut f&#252;r Kernphysik, Universit&#228;t zu K&#246;ln</span></div>
+      <div class="info-row"><span class="info-label">License</span><span>GNU GPL v3</span></div>
+      <div class="info-row"><span class="info-label">Copyright</span><span>&#169; 2019&#8211;2026 Dennis Muecher</span></div>
+    </div>
+    <div class="info-divider"></div>
+    <div id="info-links">
+      <a href="https://github.com/dennismuecher/ShapeIt" target="_blank" class="info-link-btn">&#128279; GitHub</a>
+      <a href="https://dennismuecher.github.io/ShapeIt" target="_blank" class="info-link-btn">&#128196; Documentation</a>
+    </div>
+    <div id="info-footer">
+      <button id="info-close-btn">Close</button>
+    </div>
   </div>
 </div>
 
@@ -2169,6 +2199,21 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
     window.close();
     setStatus('Exiting... (you can close this tab now)');
   }
+
+  document.getElementById('btn-info').addEventListener('click', () => {
+    closeAllMenus();
+    document.getElementById('info-overlay').style.display = 'flex';
+  });
+  document.getElementById('info-close').addEventListener('click', () => {
+    document.getElementById('info-overlay').style.display = 'none';
+  });
+  document.getElementById('info-close-btn').addEventListener('click', () => {
+    document.getElementById('info-overlay').style.display = 'none';
+  });
+  document.getElementById('info-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('info-overlay'))
+      document.getElementById('info-overlay').style.display = 'none';
+  });
 
   document.getElementById('btn-exit').addEventListener('click', () => {
     closeAllMenus();

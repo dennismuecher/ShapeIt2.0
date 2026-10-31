@@ -659,6 +659,152 @@ html, body {
   cursor: pointer;
 }
 
+/* === Info / About Dialog === */
+#info-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+#info-dialog {
+  background: #fff;
+  width: 420px;
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.22), 0 4px 16px rgba(0, 0, 0, 0.1);
+  padding: 28px 28px 20px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+#info-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 2px 7px;
+  border-radius: 5px;
+  line-height: 1;
+  transition: background 0.1s, color 0.1s;
+}
+
+#info-close:hover {
+  background: #f0f0f0;
+  color: #374151;
+}
+
+#info-logo {
+  width: 55%;
+  height: auto;
+  display: block;
+  margin-bottom: 12px;
+}
+
+#info-title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e2a38;
+}
+
+#info-subtitle {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.info-divider {
+  width: 100%;
+  height: 1px;
+  background: #e8eaed;
+  margin: 12px 0;
+}
+
+#info-details {
+  width: 100%;
+}
+
+.info-row {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  padding: 4px 0;
+  color: #374151;
+}
+
+.info-label {
+  width: 90px;
+  flex-shrink: 0;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.info-row a {
+  color: #3a86ff;
+  text-decoration: none;
+}
+
+.info-row a:hover {
+  text-decoration: underline;
+}
+
+#info-links {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.info-link-btn {
+  display: inline-block;
+  padding: 7px 16px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #374151;
+  text-decoration: none;
+  background: #f8f9fb;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.info-link-btn:hover {
+  background: #f0f4ff;
+  border-color: #b0c4f0;
+}
+
+#info-footer {
+  margin-top: 18px;
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+#info-close-btn {
+  background: #1e2a38;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 20px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+#info-close-btn:hover {
+  background: #2d3f52;
+}
+
 #exit-discard {
   border: 1px solid #ccc;
   background: #fff;
