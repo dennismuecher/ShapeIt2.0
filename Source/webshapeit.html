@@ -2270,6 +2270,13 @@ COMMUNICATION PROTOCOL (Backend → Frontend):
 
   function doOpenMatrix(fullPath) {
     if (conn_handle) conn_handle.send('OPEN:' + fullPath);
+    // Opening a new matrix detaches the current settings file so the
+    // old file cannot be accidentally overwritten when saving later.
+    // Settings values (energies, peaks, etc.) are kept by the backend,
+    // but the user must choose a new save path explicitly.
+    currentSettingsPath = null;
+    settingsDirty = false;
+    updateSettingsDisplay();
   }
 
   function handleOpenMatrix(fullPath) {

@@ -818,7 +818,15 @@ void ShapeMatrix::BrowseRootFile()
         // to deserialise the histogram here — ReadObj() triggers StreamerInfo
         // version errors when the file was written with an older ROOT, and the
         // returned pointer can be null, causing a segfault.
-        if (!cl || !cl->InheritsFrom("TH2")) continue;
+        //
+        // Fallback: when the ROOT file was written by an older ROOT build, the
+        // class may not be in the current session's class table (cl == null) even
+        // though the stored class name is a well-known TH2 subtype.  In that
+        // case, trust the stored class name string directly.
+        const std::string cname = key->GetClassName();
+        bool isTH2 = (cl && cl->InheritsFrom("TH2")) ||
+                     (!cl && cname.size() >= 3 && cname.compare(0, 3, "TH2") == 0);
+        if (!isTH2) continue;
         matrixName.push_back(key->GetName());
     }
 }

@@ -301,7 +301,8 @@ void SendNBins(unsigned connid)
 // Sends the list of matrix names found in the currently open file, and draws +
 // selects the given 1-based index -- mirrors ShapeFrame::MatrixSelector() +
 // ShapeFrame::MatrixSelect() combined into one step.
-void SendMatrixListAndSelect(unsigned connid, const std::string &matrixPath, int selectIndex)
+// Returns true if the matrix was drawn successfully, false if it failed to load.
+bool SendMatrixListAndSelect(unsigned connid, const std::string &matrixPath, int selectIndex)
 {
     auto names = matrix->GetMatrixName();
 
@@ -318,7 +319,7 @@ void SendMatrixListAndSelect(unsigned connid, const std::string &matrixPath, int
     if (!hist) {
         window->Send(connid, "ERROR:Could not load matrix '" + names[selectIndex-1] +
                      "'. The file may have been written with an incompatible ROOT version.");
-        return;
+        return false;
     }
 
     // Clear canvas and set up fresh, exactly like SHOWMATRIX does
@@ -385,6 +386,7 @@ void SendMatrixListAndSelect(unsigned connid, const std::string &matrixPath, int
     gPad->Modified();
     PushCanvasUpdate();
     matrix->Diag();
+    return true;
 }
 
 // Sends the current sett state back to the browser so form fields can be kept
@@ -2227,6 +2229,12 @@ void ProcessData(unsigned connid, const std::string &arg)
             sett->bgEne[1][2] = 1100; sett->bgEne[1][3] = 1150;
         }
 
+        // Detach the settings file after the defaults check above so that
+        // the values from the previous settings file are kept for this open,
+        // but the old file cannot be silently overwritten on a future save.
+        // The user must choose a new save path explicitly.
+        sett->settFileName = "";
+
         delete matrix;
         matrix = nullptr;
         matrix = new ShapeMatrix(sett);
@@ -2418,12 +2426,15 @@ void ProcessData(unsigned connid, const std::string &arg)
         DumpSettings();
 
         // mirrors ShapeFrame::OpenSettingFile -- the settings file references
-        // both a data file and a specific matrix name within it
+        // both a data file and a specific matrix name within it.
+        // finalStatus: empty means we'll show "Settings loaded:" at the end;
+        // non-empty means something went wrong and we show that instead.
+        std::string finalStatus;
         if (sett->dataFileName.empty()) {
-            window->Send(connid, "Settings loaded, but no data file listed in it.");
+            finalStatus = "Settings loaded, but no data file listed in it.";
         }
         else if (gSystem->AccessPathName(sett->dataFileName.c_str())) {
-            window->Send(connid, "Settings loaded, but matrix file not found: " + sett->dataFileName);
+            finalStatus = "Settings loaded, but matrix file not found: " + sett->dataFileName;
         }
         else {
             currentMatrixPath = sett->dataFileName;
@@ -2437,27 +2448,46 @@ void ProcessData(unsigned connid, const std::string &arg)
                 if (names[i] == sett->matrixName) idx = (int)i + 1;
 
             if (idx > 0) {
-                SendMatrixListAndSelect(connid, currentMatrixPath, idx);
+                bool matrixOk = SendMatrixListAndSelect(connid, currentMatrixPath, idx);
                 SendNBins(connid);
-                // Enable width calibration since we have a matrix loaded
                 window->Send(connid, "WIDTH_CALIB_AVAILABLE:1");
                 SendWidthCalibDone(connid);
-                // Send efficiency correction status
                 std::string effiMsg = "EFFI_INFO:" + std::string(sett->doEffi ? "1" : "0") + "|" + sett->effiFileName;
                 window->Send(connid, effiMsg);
+                if (!matrixOk) {
+                    // SendMatrixListAndSelect already sent an ERROR: message;
+                    // keep it visible as the final status instead of overwriting.
+                    finalStatus = "ERROR: matrix '" + sett->matrixName +
+                                  "' could not be read (incompatible ROOT version?).";
+                }
             }
-            else
-                window->Send(connid, "Warning: matrix '" + sett->matrixName + "' from settings not found in " + sett->dataFileName);
+            else {
+                // Build a helpful diagnostic: list the matrices actually found so
+                // the user knows what names the file contains.
+                std::string found = names.empty() ? "(none)" : "";
+                for (size_t i = 0; i < names.size(); i++) {
+                    if (i) found += ", ";
+                    found += names[i];
+                }
+                finalStatus = "Warning: matrix '" + sett->matrixName +
+                              "' not found in " + sett->dataFileName +
+                              ". Matrices in file: " + found;
+            }
         }
 
+        // Always sync settings and notepad regardless of whether the matrix loaded.
         SendSettingsSync(connid);
         SendNotepadText(connid);
-        // Enable "Display expectation" only if the loaded settings reference a
-        // valid gSF literature file; otherwise keep it greyed out.
         bool osloOk = !sett->osloFileName.empty() &&
                       !gSystem->AccessPathName(sett->osloFileName.c_str());
         window->Send(connid, std::string("OSLO_AVAILABLE:") + (osloOk ? "1" : "0"));
-        window->Send(connid, "Settings loaded: " + path);
+
+        // Show "Settings loaded" only when everything went well; otherwise show
+        // the diagnostic message so it stays visible in the status bar.
+        if (finalStatus.empty())
+            window->Send(connid, "Settings loaded: " + path);
+        else
+            window->Send(connid, finalStatus);
     }
     else if (starts_with(arg, "SAVE_SETTINGS:")) {
         // Uses sett as it currently stands -- i.e. whatever the last "ShapeIt!"
